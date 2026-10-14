@@ -4,7 +4,7 @@ import type { StreamState } from "../composables/useLiveCalls";
 import { formatCallTime, formatDuration, formatPhone } from "../lib/format";
 import StatusBadge from "./StatusBadge.vue";
 
-defineProps<{ calls: Call[]; timezone: string; streamState: StreamState; live: boolean }>();
+defineProps<{ calls: Call[]; timezone: string; streamState: StreamState }>();
 
 const STATE_LABELS: Record<StreamState, string> = {
   connecting: "Connecting…",
@@ -17,8 +17,7 @@ const STATE_LABELS: Record<StreamState, string> = {
   <section class="panel">
     <header>
       <h2>Recent calls</h2>
-      <span v-if="live" class="state" :class="streamState">● {{ STATE_LABELS[streamState] }}</span>
-      <span v-else class="state paused">Paused — custom range</span>
+      <span class="state" :class="streamState">● {{ STATE_LABELS[streamState] }}</span>
     </header>
     <p v-if="calls.length === 0" class="empty">No calls match these filters.</p>
     <div v-else class="table-wrapper">
@@ -65,9 +64,6 @@ header {
 .state.connecting,
 .state.reconnecting {
   color: #d9822b;
-}
-.state.paused {
-  color: var(--muted);
 }
 .table-wrapper {
   max-height: 460px;

@@ -12,7 +12,6 @@ const PRESETS = [
   { value: "7d", label: "Last 7 days" },
   { value: "30d", label: "Last 30 days" },
   { value: "90d", label: "Last 90 days" },
-  { value: "custom", label: "Custom range" },
 ] as const;
 
 function toggleStatus(status: CallStatus) {
@@ -29,16 +28,6 @@ function toggleStatus(status: CallStatus) {
         <option v-for="preset in PRESETS" :key="preset.value" :value="preset.value">{{ preset.label }}</option>
       </select>
     </label>
-    <template v-if="filters.preset === 'custom'">
-      <label>
-        <span>From</span>
-        <input v-model="filters.customStart" type="date" />
-      </label>
-      <label>
-        <span>To</span>
-        <input v-model="filters.customEnd" type="date" />
-      </label>
-    </template>
     <div class="field">
       <span>Campaigns</span>
       <CampaignPicker v-model="filters.campaignIds" :campaigns="campaigns" />
@@ -88,8 +77,7 @@ label,
   font-size: 13px;
   color: var(--muted);
 }
-select,
-input {
+select {
   font: inherit;
   color: var(--text);
   background: var(--background);

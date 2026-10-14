@@ -10,7 +10,7 @@ import { LIVE_REFRESH_MS, useDashboard } from "../composables/useDashboard";
 import { useLiveCalls } from "../composables/useLiveCalls";
 import { useSession } from "../composables/useSession";
 import { conversionChartData, volumeChartData } from "../lib/chartData";
-import { hourlyViewAllowed, isLive } from "../lib/filters";
+import { hourlyViewAllowed } from "../lib/filters";
 
 const router = useRouter();
 const { currentUser, signOut } = useSession();
@@ -39,7 +39,7 @@ onMounted(async () => {
       <div>
         <h1>{{ currentUser?.account_name }}</h1>
         <span class="muted">Inbound call performance · times in {{ currentUser?.timezone }}</span>
-        <p v-if="isLive(filters)" class="refresh-note">Everything on this page updates every {{ refreshSeconds }} seconds.</p>
+        <p class="refresh-note">Everything on this page updates every {{ refreshSeconds }} seconds.</p>
       </div>
       <div class="actions">
         <span class="muted">{{ currentUser?.name }}</span>
@@ -80,7 +80,7 @@ onMounted(async () => {
           <ConversionChart v-if="conversionData" :data="conversionData" />
         </div>
       </section>
-      <LiveFeed :calls="feed" :timezone="currentUser?.timezone ?? 'UTC'" :stream-state="streamState" :live="isLive(filters)" />
+      <LiveFeed :calls="feed" :timezone="currentUser?.timezone ?? 'UTC'" :stream-state="streamState" />
     </div>
   </div>
 </template>

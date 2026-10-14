@@ -24,12 +24,6 @@ describe("rangeFor", () => {
 
     expect(range).toEqual({ start: new Date("2026-10-12T15:00:00Z"), end: NOW });
   });
-
-  it("includes the whole last day of a custom range", () => {
-    const range = rangeFor({ ...defaultFilters(), preset: "custom", customStart: "2026-10-01", customEnd: "2026-10-01" }, NOW);
-
-    expect(range.end.getTime() - range.start.getTime()).toBe(24 * 60 * 60 * 1000);
-  });
 });
 
 describe("effectiveGranularity", () => {

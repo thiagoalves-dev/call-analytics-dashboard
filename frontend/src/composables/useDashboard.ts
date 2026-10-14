@@ -1,7 +1,7 @@
 import { computed, onBeforeUnmount, reactive, ref, watch } from "vue";
 import { fetchCampaigns, fetchConversion, fetchRecentCalls, fetchVolume } from "../api/endpoints";
 import type { Call, Campaign, ConversionGrouping, ConversionResponse, Granularity, VolumeResponse } from "../api/types";
-import { callMatchesFilters, defaultFilters, effectiveGranularity, isLive, rangeFor, toQueryParams } from "../lib/filters";
+import { callMatchesFilters, defaultFilters, effectiveGranularity, rangeFor, toQueryParams } from "../lib/filters";
 
 const FEED_SIZE = 50;
 export const LIVE_REFRESH_MS = 10_000;
@@ -79,12 +79,12 @@ export function useDashboard() {
   }
 
   function receiveLiveCall(call: Call) {
-    if (!isLive(filters) || !callMatchesFilters(call, filters)) return;
+    if (!callMatchesFilters(call, filters)) return;
     pendingCalls.push(call);
     scheduleLiveRefresh();
   }
 
-  const slidingWindow = setInterval(() => isLive(filters) && reload(), SLIDING_WINDOW_REFRESH_MS);
+  const slidingWindow = setInterval(reload, SLIDING_WINDOW_REFRESH_MS);
   onBeforeUnmount(() => {
     clearInterval(slidingWindow);
     if (liveRefreshTimer) clearTimeout(liveRefreshTimer);

@@ -101,7 +101,6 @@ growing memory; `EventSource` reconnects on its own and the UI reloads the feed.
 Date range, campaigns and outcomes apply to the volume chart and the feed. The **conversion rate ignores
 the outcome filter**: a conversion rate over only missed calls is always 0% and means nothing. The UI says
 so under the chart. Live calls are filtered in the browser, so changing a filter doesn't reopen the stream.
-A custom date range pauses the live feed (it's a look at the past).
 
 ## Code organization
 
