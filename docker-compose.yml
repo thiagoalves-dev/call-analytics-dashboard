@@ -1,0 +1,101 @@
+x-api-environment: &api-environment
+  DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/calls
+  REDIS_URL: redis://redis:6379/0
+  JWT_SECRET: local-demo-only-secret-replace-in-production
+  # Calls generated per company at first start. 500k each by default.
+  # Large datasets: see "Running with 50 million calls per company" in the README.
+  SEED_CALLS_PER_ACCOUNT: ${SEED_CALLS_PER_ACCOUNT:-500000}
+  DEMO_API_KEY_ACME: demo-acme-ingest-key
+  DEMO_API_KEY_SUMMIT: demo-summit-ingest-key
+
+services:
+  db:
+    image: timescale/timescaledb:2.22.1-pg17
+    environment:
+      POSTGRES_DB: calls
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    shm_size: 1g
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d calls"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  redis:
+    image: redis:7.4-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  # One-shot: runs migrations, then seeds demo data if the database is empty.
+  setup:
+    build:
+      context: ./backend
+      target: production
+    environment: *api-environment
+    command: ["sh", "-c", "alembic upgrade head && python -m app.seed"]
+    depends_on:
+      db:
+        condition: service_healthy
+
+  api:
+    build:
+      context: ./backend
+      target: production
+    environment: *api-environment
+    ports:
+      - "${API_PORT:-8000}:8000"
+    depends_on:
+      setup:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  # Stands in for the telephony provider. CALLS_PER_SECOND=0 pauses it.
+  simulator:
+    build: ./simulator
+    environment:
+      API_URL: http://api:8000
+      API_KEYS: demo-acme-ingest-key,demo-summit-ingest-key
+      CALLS_PER_SECOND: ${CALLS_PER_SECOND:-0.3}
+    depends_on:
+      api:
+        condition: service_healthy
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "${WEB_PORT:-1011}:80"
+    depends_on:
+      api:
+        condition: service_healthy
+
+  # Backend test suite: docker compose --profile test run --rm api-tests
+  api-tests:
+    profiles: ["test"]
+    build:
+      context: ./backend
+      target: test
+    environment:
+      <<: *api-environment
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/calls_test
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  db-data:

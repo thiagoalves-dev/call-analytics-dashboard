@@ -1,0 +1,34 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>body{margin:0;background:#fff;font-family:Inter,system-ui,sans-serif}#wrap{padding:28px 32px;display:inline-block}h1{font-size:20px;margin:0 0 4px}p{margin:0 0 12px;color:#687385;font-size:13px}</style>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.min.js"></script>
+</head><body><div id="wrap">
+<h1>Call Analytics Dashboard — architecture</h1>
+<p>Everything runs with <b>docker compose up</b>. Solid arrows: requests and the live path (1 → 2 → 3). Dashed: reads and setup.</p>
+<pre class="mermaid">
+flowchart LR
+  UI["<b>Browser</b><br/>Vue 3 dashboard<br/>charts · filters · live feed"]
+  NGINX["<b>frontend</b> · nginx<br/>serves the Vue build<br/>proxies /api (SSE unbuffered)"]
+  API["<b>api</b> · FastAPI ×2 processes<br/>routers → actions → repositories<br/>1 Redis subscription per process"]
+  SIM["<b>simulator</b><br/>stands in for the<br/>telephony provider"]
+  REDIS[("<b>Redis</b><br/>pub/sub<br/>channel per account")]
+  subgraph DB["db · PostgreSQL 17 + TimescaleDB"]
+    CALLS[("<b>calls</b><br/>hypertable<br/>1-day chunks")]
+    AGG[("<b>call_stats_hourly</b><br/>continuous aggregate")]
+    META[("accounts · users<br/>api_keys · campaigns")]
+  end
+  SETUP["<b>setup</b> · one-shot<br/>migrations + bulk seed"]
+
+  UI <-- "REST + JWT cookie<br/>Server-Sent Events" --> NGINX
+  NGINX <--> API
+  SIM -- "POST /api/calls<br/>X-API-Key" --> API
+  API -- "1 · insert call" --> CALLS
+  API -- "2 · publish" --> REDIS
+  REDIS -- "3 · fan out to every<br/>API process → SSE" --> API
+  CALLS -- "refresh every 5 min<br/>+ real-time newest rows" --> AGG
+  AGG -. "charts" .-> API
+  META -. "auth, campaigns" .-> API
+  SETUP -. "generate_series backfill" .-> CALLS
+</pre></div>
+<script>mermaid.initialize({startOnLoad:true,theme:"neutral",themeVariables:{fontSize:"17px"},flowchart:{curve:"basis",nodeSpacing:40,rankSpacing:70}});</script>
+</body></html>

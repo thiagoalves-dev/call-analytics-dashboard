@@ -1,0 +1,10 @@
+[project]
+name = "call-simulator"
+version = "0.1.0"
+description = "Stands in for the telephony provider: sends finished calls to the API"
+requires-python = ">=3.12"
+dependencies = ["httpx>=0.28"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
