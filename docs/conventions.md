@@ -10,6 +10,7 @@ and the frontend.
    [architecture.md](architecture.md). Config files (`docker-compose.yml`, `nginx.conf`, `config.py`)
    are the exception.
 2. **Small functions.** A function or method is at most 20 lines. Extract well-named private helpers.
+   Alembic migrations are exempt: an `upgrade()` that creates tables reads best as one list of steps.
 3. **No abbreviations, no placeholder names.** `call_filter`, not `f`; `bucket`, not `b`;
    `timezone`, not `tz`. If a variable holds a value used once, inline it.
 4. **Named constants, not magic numbers.** `MAX_HOURLY_RANGE = timedelta(days=31)`, never a bare `31`.

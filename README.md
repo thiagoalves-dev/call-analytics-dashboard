@@ -34,7 +34,7 @@ dashboard updates live.
 ### Tests
 
 ```bash
-docker compose --profile test run --rm api-tests     # backend: 59 tests against a real PostgreSQL
+docker compose --profile test run --rm api-tests     # backend: 88 tests against a real PostgreSQL
 cd frontend && npm install && npm test                # frontend: Vitest
 ```
 

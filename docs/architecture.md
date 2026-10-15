@@ -11,7 +11,7 @@
 | `db` | Plain PostgreSQL 17, no extensions | The same engine you get on AWS RDS / Aurora. Daily partitions and an hourly rollup table keep the dashboard fast without anything RDS doesn't offer. |
 | `redis` | Redis pub/sub | Fan-out of new calls to every API process. |
 | `simulator` | A small Python service | Stands in for the telephony provider. Sends finished calls to `POST /api/calls`, the same way a webhook would. |
-| `setup` | One-shot container | Runs the Alembic migrations, creates the daily partitions, then seeds demo data if the database is empty. |
+| `setup` | One-shot container | Runs the Alembic migrations, creates the daily partitions, then seeds demo data unless a finished seed is recorded. |
 
 ## Data flow
 
@@ -21,13 +21,21 @@
 Server-Sent Events → the browser collects new calls and, every 10 seconds, adds them to the feed and refetches
 the charts. The page says so at the top.
 
+The publish happens after the commit and is best effort: if Redis is down, the failure is logged and the
+call still returns `201`. The call is stored and counted; only the live push is lost, and the dashboard
+shows it on its next refresh.
+
 **Read path.** The charts read `call_stats_hourly`, never the raw table. The live feed reads the 50 calls
 that ended most recently through the `(account_id, ended_at DESC)` index. It orders by `ended_at`, not
 `started_at`, because a call is reported when it ends: a 10-minute call that just finished belongs at the top.
 
 **Backfill path.** The historical seed skips the API and generates rows inside Postgres
 (`INSERT … SELECT generate_series`), one day at a time, then rolls that day up into `call_stats_hourly`
-with one `INSERT … SELECT … GROUP BY`. Bulk backfill and live ingestion are separate paths
+with one `INSERT … SELECT … GROUP BY`. Each local day's hours are counted in UTC from local midnight to the
+next local midnight, so the day daylight saving time starts has 23 hours and the day it ends has 25. When
+every account is seeded, the seeder writes a row to `seed_runs`. If accounts exist without that row, an
+earlier seed was interrupted: `setup` stops with an error asking for `docker compose down -v` instead of
+deleting data or leaving a half-seeded database behind. Bulk backfill and live ingestion are separate paths
 on purpose: loading millions of rows through HTTP would take hours.
 
 ## Data model
@@ -41,6 +49,7 @@ on purpose: loading millions of rows through HTTP would take hours.
   `ended_at` (start + duration) is stored so the feed can sort by it with an index.
 - `call_stats_hourly` — the rollup: one row per account, hour and campaign, with a counter per outcome and
   the total duration.
+- `seed_runs` — one row once the demo seed has finished.
 
 ## Decisions and why
 
@@ -60,8 +69,13 @@ on AWS RDS / Aurora:
 - **Native partitioning, one partition per day.** "Last 7 days" only touches 7–8 partitions, and old data
   is dropped or archived a whole day at a time (`DROP TABLE calls_20260701`) instead of with a huge `DELETE`.
   `create_call_partitions(first_day, last_day)` creates them; `setup` runs it on every start, from the oldest
-  seeded day to 30 days ahead. A `calls_default` partition catches anything outside that range so an insert
-  never fails. On RDS, `pg_partman` + `pg_cron` would create tomorrow's partition every night.
+  seeded day to 30 days ahead, and every API process runs it once an hour from today to 30 days ahead, so
+  the partitions stay ahead while the stack keeps running. The function takes an advisory lock, so the two
+  workers never race, and skips days that already exist. A `calls_default` partition catches anything
+  outside that range so an insert never fails. When a day's partition is created later, the function builds
+  it as a standalone table, moves that day's rows out of `calls_default` into it, then attaches it. Attaching
+  takes a lighter lock than `CREATE TABLE … PARTITION OF` and never fails on rows already in the default
+  partition. On RDS, `pg_partman` + `pg_cron` could take over this job.
 - **`call_stats_hourly`, a rollup table kept up to date on insert.** Every new call runs an upsert in the
   same transaction: insert the (account, hour, campaign) row or add 1 to its counters. The charts read at
   most 24 rows per campaign per day, and the numbers are exact the moment the call is committed. A late
@@ -86,7 +100,10 @@ the account (API key) and the campaign (tracking number) on the way in.
 
 Telephony webhooks retry. `external_id` (the provider's call id) has a partial unique index
 `(account_id, external_id, started_at)`, and the insert uses `ON CONFLICT DO NOTHING`. A retry returns
-`200` with the stored call, is not counted again in the rollup, and is not re-published. Postgres requires
+`200` with the stored call (and its own campaign), is not counted again in the rollup, and is not
+re-published. A delivery that reuses an `external_id` and `started_at` with different data (tracking
+number, outcome, duration or caller) is not a retry: it returns `409 Conflict` and the stored call is left
+as it is. Postgres requires
 the partition column in every unique index on a partitioned table; a genuine retry carries the same
 `started_at`, so that's fine. A retry with a *different*
 `started_at` would be stored twice — a known limitation.
@@ -99,14 +116,19 @@ delivery; history goes through the backfill path.
 The dashboard only receives, so Server-Sent Events fit better than WebSockets: plain HTTP, automatic
 reconnect, nothing to send back. Each API process holds **one** Redis subscription and fans events out to
 its own browsers through in-memory queues. A browser that falls 100 events behind is disconnected instead of
-growing memory; `EventSource` reconnects on its own and the UI reloads the feed. A heartbeat comment every
+growing memory; the browser reconnects (on its own after a network drop, with a 1–30 s backoff after an HTTP error) and the UI reloads the feed. If the Redis subscription
+drops, the process closes it, subscribes again, and marks every browser it serves as behind: events
+published during the gap are lost, so those browsers reconnect and reload instead of silently missing
+calls. A heartbeat comment every
 15 seconds keeps proxies from closing idle connections.
 
 ### Auth: people log in, machines use keys
 
 - **Users:** email + password (bcrypt) → JWT in an **httpOnly cookie**. A cookie and not an
   `Authorization` header because the browser's `EventSource` can't send custom headers. httpOnly keeps the
-  token away from JavaScript (XSS); `SameSite=Lax` blocks cross-site POSTs (CSRF).
+  token away from JavaScript (XSS); `SameSite=Lax` blocks cross-site POSTs (CSRF). An unknown email is
+  still checked against a fixed bcrypt hash, so response time doesn't reveal which emails are registered.
+  A valid cookie whose user or account no longer exists gets `401`.
 - **Simulator:** an API key per account in the `X-API-Key` header.
 
 ### Filters
