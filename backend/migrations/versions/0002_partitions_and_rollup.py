@@ -11,14 +11,24 @@ CREATE FUNCTION create_call_partitions(first_day date, last_day date) RETURNS vo
 LANGUAGE plpgsql AS $$
 DECLARE
     day date;
+    partition_name text;
+    day_start timestamptz;
+    day_end timestamptz;
 BEGIN
     PERFORM pg_advisory_xact_lock(hashtext('create_call_partitions'));
     FOR day IN SELECT generate_series(first_day, last_day, INTERVAL '1 day')::date LOOP
+        partition_name := 'calls_' || to_char(day, 'YYYYMMDD');
+        CONTINUE WHEN to_regclass(partition_name) IS NOT NULL;
+        day_start := day::timestamp AT TIME ZONE 'UTC';
+        day_end := (day + 1)::timestamp AT TIME ZONE 'UTC';
+        EXECUTE format('CREATE TABLE %I (LIKE calls INCLUDING DEFAULTS)', partition_name);
         EXECUTE format(
-            'CREATE TABLE IF NOT EXISTS %I PARTITION OF calls FOR VALUES FROM (%L) TO (%L)',
-            'calls_' || to_char(day, 'YYYYMMDD'),
-            day::timestamp AT TIME ZONE 'UTC',
-            (day + 1)::timestamp AT TIME ZONE 'UTC'
+            'WITH moved AS (DELETE FROM calls_default WHERE started_at >= %L AND started_at < %L RETURNING *) '
+            'INSERT INTO %I SELECT * FROM moved',
+            day_start, day_end, partition_name
+        );
+        EXECUTE format(
+            'ALTER TABLE calls ATTACH PARTITION %I FOR VALUES FROM (%L) TO (%L)', partition_name, day_start, day_end
         );
     END LOOP;
 END;

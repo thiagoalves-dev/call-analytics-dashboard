@@ -5,6 +5,7 @@ from app.models.call import Call
 from app.models.call_stats_hourly import call_stats_hourly
 from app.models.call_status import CallStatus
 from app.models.campaign import Campaign
+from app.models.seed_run import SeedRun
 from app.models.user import User
 
-__all__ = ["Account", "ApiKey", "Base", "Call", "CallStatus", "Campaign", "User", "call_stats_hourly"]
+__all__ = ["Account", "ApiKey", "Base", "Call", "CallStatus", "Campaign", "SeedRun", "User", "call_stats_hourly"]

@@ -2,11 +2,13 @@ import logging
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
-from sqlalchemy import func, select, text
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from app.config import Settings
+from app.exceptions import IncompleteSeedError
 from app.models import Account, ApiKey, Campaign, User
+from app.repositories import account_repository, seed_run_repository
 from app.security import hash_api_key, hash_password
 from app.seed.demo_accounts import DEMO_ACCOUNTS, DemoAccount
 from app.seed.traffic_plan import CampaignHour, campaign_hours, hourly_slots
@@ -17,6 +19,10 @@ logger = logging.getLogger(__name__)
 GENERATE_CALLS_SQL = text((Path(__file__).parent / "generate_calls.sql").read_text())
 ROLL_UP_CALLS_SQL = text((Path(__file__).parent / "roll_up_calls.sql").read_text())
 ONE_DAY = timedelta(days=1)
+INCOMPLETE_SEED_MESSAGE = (
+    "The database holds data from a seed that never finished. "
+    "Run `docker compose down -v` to delete it, then `docker compose up` to seed again."
+)
 
 
 class Seeder:
@@ -27,11 +33,15 @@ class Seeder:
 
     async def __call__(self) -> None:
         async with AsyncSession(self.engine, expire_on_commit=False) as session:
-            if await session.scalar(select(func.count()).select_from(Account)):
+            if await seed_run_repository.has_completed(session):
                 logger.info("Database already seeded, skipping")
                 return
+            if await account_repository.any_exists(session):
+                raise IncompleteSeedError(INCOMPLETE_SEED_MESSAGE)
             for demo_account in DEMO_ACCOUNTS:
                 await self.seed_account(session, demo_account)
+            await seed_run_repository.mark_completed(session)
+            await session.commit()
         await self.analyze()
         logger.info("Seed complete")
 

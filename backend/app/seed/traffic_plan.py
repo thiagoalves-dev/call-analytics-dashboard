@@ -1,12 +1,13 @@
 import random
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from app.seed.demo_accounts import CampaignProfile
 from app.support.time import local_midnight
 
 ONE_HOUR = timedelta(hours=1)
-HOURS_IN_DAY = 24
+ONE_DAY = timedelta(days=1)
 
 HOUR_OF_DAY_WEIGHTS = (
     0.05,
@@ -53,12 +54,13 @@ class CampaignHour:
 
 
 def hourly_slots(day: date, timezone: str, now: datetime) -> list[HourlySlot]:
-    midnight = local_midnight(day, timezone)
+    hour_start = local_midnight(day, timezone).astimezone(UTC)
+    next_midnight = local_midnight(day + ONE_DAY, timezone).astimezone(UTC)
     slots = []
-    for hour in range(HOURS_IN_DAY):
-        hour_start = midnight + hour * ONE_HOUR
-        if hour_start + ONE_HOUR <= now:
-            slots.append(HourlySlot(hour_start, slot_weight(hour, day)))
+    while hour_start < next_midnight and hour_start + ONE_HOUR <= now:
+        local_hour = hour_start.astimezone(ZoneInfo(timezone)).hour
+        slots.append(HourlySlot(hour_start, slot_weight(local_hour, day)))
+        hour_start += ONE_HOUR
     return slots
 
 
