@@ -30,3 +30,12 @@ async def send_volume_request(client: AsyncClient, params: dict | None = None) -
 
 async def send_conversion_request(client: AsyncClient, params: dict | None = None) -> Response:
     return await client.get("/api/stats/conversion", params=params)
+
+
+async def send_list_campaigns_request(client: AsyncClient) -> Response:
+    return await client.get("/api/campaigns")
+
+
+async def send_tracking_numbers_request(client: AsyncClient, api_key: str | None) -> Response:
+    headers = {"X-API-Key": api_key} if api_key else {}
+    return await client.get("/api/ingest/tracking-numbers", headers=headers)
