@@ -72,7 +72,7 @@ A dashboard that shows a marketing manager how their inbound calls are doing: ca
 ### Key trade-offs
 
 - **Plain Postgres, so it runs on AWS RDS.** Calls are split into daily partitions, and an hourly counters table keeps the charts fast at 100M calls. The cost: keeping the counters right is our code's job, not the database's. Without the RDS requirement, TimescaleDB would do both out of the box.
-- **Refresh every 10 seconds, not on every call.** Easier to read, and the database load doesn't multiply with every call times every open dashboard.
+- **Refresh every 10 seconds instead of on every call.** A new call can take up to 10 seconds to appear, but the database load no longer grows with call volume: a busy company with 20 dashboards open sends 2 queries per second instead of one per call per dashboard.
 - **Shared tables with `account_id` on every row.** The simplest multi-tenant model, and it can be sharded by account later.
 - **httpOnly cookie login for people, API keys for machines.**
 
@@ -80,6 +80,7 @@ A dashboard that shows a marketing manager how their inbound calls are doing: ca
 
 - Prepare for 500 enterprise customers: connection pooling, scheduled partition management with pg_partman, batched rollup updates, read replicas, then streaming calls into a columnar store like ClickHouse.
 - Show calls while they're still ringing (today a call appears when it ends).
+- Apply each live call to the charts in the browser, re-syncing from the API every 60 seconds, so the numbers move with the feed and chart queries drop 6x.
 - Revenue and cost per call, missed-call alerts, comparison with the previous period.
 - Browser end-to-end tests and a load test on the live stream.
 
