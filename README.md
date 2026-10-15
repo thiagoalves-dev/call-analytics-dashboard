@@ -96,7 +96,10 @@ A dashboard that shows a marketing manager how their inbound calls are doing: ca
 
 ### How I used AI
 
-[Thiago: which parts leaned most on AI, and how confident you are extending them.]
+I used AI (Claude Code) for the whole process. We brainstormed approaches together, and I made the calls on stack, data model, multi-tenancy, the real-time approach and scope. From the brief we built a checklist of requirements and tests and worked through it item by item. The AI wrote all of the code, following my coding and testing standards ([docs/conventions.md](docs/conventions.md)) and the functionality and usability we defined. At the end I also used it to review the codebase, fix what it found, improve test coverage and challenge our decisions, and to write the documentation and the architecture diagram.
+
+Where I relied on AI the most was the performance strategy: daily partitions plus an hourly counters table. We discussed several options, and I asked questions until I understood the trade-offs, but in the end I followed its recommendation. The right strategy depends on the shape of the data, not only its size. I'm comfortable extending it, for example adding a new dimension to the counters or dropping old partitions.
+
 
 ## More detail
 
