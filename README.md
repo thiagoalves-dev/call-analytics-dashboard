@@ -77,10 +77,8 @@ A dashboard that shows a marketing manager how their inbound calls are doing: ca
 
 ### What I'd do with more time
 
-- Prepare for 500 enterprise customers: connection pooling, scheduled partition management with pg_partman, batched rollup updates, read replicas, then streaming calls into a columnar store like ClickHouse.
 - Show calls while they're still ringing (today a call appears when it ends).
-- Apply each live call to the charts in the browser, re-syncing from the API every 60 seconds, so the numbers move with the feed and chart queries drop 6x.
-- Revenue and cost per call, missed-call alerts, comparison with the previous period.
+- Update the charts straight from the live calls the browser already receives, instead of asking the API every 10 seconds, so the numbers move as soon as a call comes in.
 - Browser end-to-end tests and a load test on the live stream.
 
 ### Intentionally left out
