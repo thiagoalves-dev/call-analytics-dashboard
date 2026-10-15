@@ -20,8 +20,11 @@ Open http://localhost:1011 and click one of the demo accounts:
 | Acme Home Services (Chicago) | `manager@acme.test` | `acme-demo` |
 | Summit Auto Group (New York) | `manager@summit.test` | `summit-demo` |
 
-The first start creates the database and seeds 500,000 calls per company over the last 90 days (about 10 seconds).
-A simulator then sends new calls, and the page updates every 10 seconds.
+The first start creates the database and seeds 500,000 calls per company over the last 90 days (about 10 seconds,
+~240 MB). A simulator then sends new calls, and the page updates every 10 seconds.
+
+The default is small on purpose: the design is built for much more data, but 50 million calls per company take about
+20 GB of disk, and I didn't want to fill your machine without asking. The larger run is one command away (below).
 
 - API docs: http://localhost:1012/docs
 - Faster simulator: `CALLS_PER_SECOND=2 docker compose up` (`0` pauses it)
@@ -42,7 +45,7 @@ docker compose down -v
 SEED_CALLS_PER_ACCOUNT=50000000 docker compose up --build
 ```
 
-About 10 minutes of seeding and 20 GB of disk. Measured on a MacBook (Docker Desktop, 8 CPUs, 16 GB), one company,
+About 10 minutes of seeding and 20 GB of disk. Measured on a Mac Studio (M2 Max; Docker Desktop with 8 CPUs and 16 GB), one company,
 median of 5 runs:
 
 | Query | Counting raw calls | Reading the hourly counters |
