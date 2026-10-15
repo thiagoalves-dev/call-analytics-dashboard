@@ -2,8 +2,6 @@ x-api-environment: &api-environment
   DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/calls
   REDIS_URL: redis://redis:6379/0
   JWT_SECRET: local-demo-only-secret-replace-in-production
-  # Calls generated per company at first start. 500k each by default.
-  # Large datasets: see "Running with 50 million calls per company" in the README.
   SEED_CALLS_PER_ACCOUNT: ${SEED_CALLS_PER_ACCOUNT:-500000}
   DEMO_API_KEY_ACME: demo-acme-ingest-key
   DEMO_API_KEY_SUMMIT: demo-summit-ingest-key
@@ -32,7 +30,6 @@ services:
       timeout: 3s
       retries: 30
 
-  # One-shot: runs migrations, then seeds demo data if the database is empty.
   setup:
     build:
       context: ./backend
@@ -61,7 +58,6 @@ services:
       timeout: 3s
       retries: 20
 
-  # Stands in for the telephony provider. CALLS_PER_SECOND=0 pauses it.
   simulator:
     build: ./simulator
     environment:
@@ -80,7 +76,6 @@ services:
       api:
         condition: service_healthy
 
-  # Backend test suite: docker compose --profile test run --rm api-tests
   api-tests:
     profiles: ["test"]
     build:

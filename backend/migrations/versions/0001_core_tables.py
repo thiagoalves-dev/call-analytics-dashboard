@@ -1,10 +1,3 @@
-"""Core tables: accounts, users, API keys, campaigns, calls.
-
-Revision ID: 0001
-Revises:
-Create Date: 2026-10-13
-"""
-
 import sqlalchemy as sa
 from alembic import op
 
