@@ -1,5 +1,6 @@
 const PERCENT = new Intl.NumberFormat("en-US", { style: "percent", maximumFractionDigits: 1 });
 const COUNT = new Intl.NumberFormat("en-US");
+const COMPACT = new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 });
 
 export function formatPercent(rate: number | null): string {
   return rate === null ? "—" : PERCENT.format(rate);
@@ -23,15 +24,29 @@ export function formatBucket(bucket: string, granularity: "hour" | "day", timezo
   return new Intl.DateTimeFormat("en-US", options).format(new Date(bucket));
 }
 
-export function formatCallTime(startedAt: string, timezone: string): string {
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    second: "2-digit",
-    timeZone: timezone,
-  }).format(new Date(startedAt));
+export function formatCompact(count: number): string {
+  return COMPACT.format(count);
+}
+
+function calendarDay(date: Date, timezone: string): string {
+  return new Intl.DateTimeFormat("en-US", { dateStyle: "short", timeZone: timezone }).format(date);
+}
+
+export function formatCallTime(endedAt: string, timezone: string, now: Date = new Date()): string {
+  const ended = new Date(endedAt);
+  const time: Intl.DateTimeFormatOptions = { hour: "numeric", minute: "2-digit", second: "2-digit", timeZone: timezone };
+  const endedToday = calendarDay(ended, timezone) === calendarDay(now, timezone);
+  const options: Intl.DateTimeFormatOptions = endedToday ? time : { ...time, month: "short", day: "numeric" };
+  return new Intl.DateTimeFormat("en-US", options).format(ended);
+}
+
+export function initialsOf(name: string): string {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((word) => word[0].toUpperCase())
+    .join("");
 }
 
 export function formatPhone(number: string): string {

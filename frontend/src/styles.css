@@ -1,21 +1,54 @@
 :root {
-  --background: #f4f6f9;
+  --background: #f7f8fa;
   --surface: #ffffff;
-  --border: #e2e6ed;
-  --text: #1c2330;
-  --muted: #687385;
-  --accent: #3e63dd;
+  --subtle: #f1f3f6;
+  --border: #e6e8ec;
+  --border-strong: #d5d9e0;
+  --grid: #eef0f3;
+  --text: #0f1523;
+  --muted: #667085;
+  --accent: #5b5bd6;
+  --accent-soft: #eeeefc;
+  --accent-ink: #4747c2;
+  --on-accent: #ffffff;
+  --shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 1px 3px rgba(16, 24, 40, 0.03);
+  --shadow-raised: 0 12px 32px rgba(16, 24, 40, 0.12), 0 2px 6px rgba(16, 24, 40, 0.06);
+  --missed: #ec5f67;
+  --missed-soft: #fdeced;
+  --missed-ink: #c22f39;
+  --connected: #9aa7bd;
+  --connected-soft: #eef1f6;
+  --connected-ink: #4f5b73;
+  --converted: #26a86b;
+  --converted-soft: #e5f6ed;
+  --converted-ink: #157a4b;
+  --warning: #d9822b;
+  --radius: 12px;
   color-scheme: light;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #11151c;
-    --surface: #1a1f29;
-    --border: #2b3240;
-    --text: #e6e9ef;
-    --muted: #8d97a8;
-    --accent: #5b7cf0;
+    --background: #0b0d12;
+    --surface: #12151c;
+    --subtle: #1a1e27;
+    --border: #232835;
+    --border-strong: #2f3545;
+    --grid: #1e222c;
+    --text: #e8eaf0;
+    --muted: #8a93a6;
+    --accent: #7c7cf0;
+    --accent-soft: rgba(124, 124, 240, 0.16);
+    --accent-ink: #a5a5ff;
+    --on-accent: #ffffff;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --shadow-raised: 0 12px 32px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(0, 0, 0, 0.3);
+    --missed-soft: rgba(236, 95, 103, 0.15);
+    --missed-ink: #ff9198;
+    --connected-soft: rgba(154, 167, 189, 0.14);
+    --connected-ink: #bac4d6;
+    --converted-soft: rgba(38, 168, 107, 0.16);
+    --converted-ink: #52d394;
     color-scheme: dark;
   }
 }
@@ -29,24 +62,120 @@ body {
   background: var(--background);
   color: var(--text);
   font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 14px;
+  line-height: 1.45;
+  font-feature-settings: "cv11", "ss01";
+  -webkit-font-smoothing: antialiased;
+}
+
+button {
+  font: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .panel {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 14px 16px;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 18px 20px 20px;
+  min-width: 0;
 }
 
 .panel > header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
   gap: 12px;
 }
 
 .panel h2 {
   margin: 0;
-  font-size: 16px;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+@media (max-width: 640px) {
+  .panel {
+    padding: 16px;
+  }
+}
+
+.segmented {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  background: var(--subtle);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+}
+
+.segmented button {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted);
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  padding: 4px 11px;
+  cursor: pointer;
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.segmented button:hover:not(:disabled) {
+  color: var(--text);
+}
+
+.segmented button.active {
+  color: var(--text);
+  background: var(--surface);
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.1), 0 0 0 1px var(--border);
+}
+
+.segmented button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.pulse-dot {
+  position: relative;
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
+}
+
+.pulse-dot::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: currentColor;
+  animation: pulse 2s ease-out infinite;
+}
+
+@keyframes pulse {
+  from {
+    transform: scale(1);
+    opacity: 0.6;
+  }
+  to {
+    transform: scale(2.6);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pulse-dot::after {
+    animation: none;
+  }
 }

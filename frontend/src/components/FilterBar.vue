@@ -8,10 +8,10 @@ defineProps<{ campaigns: Campaign[] }>();
 const filters = defineModel<Filters>("filters", { required: true });
 
 const PRESETS = [
-  { value: "24h", label: "Last 24 hours" },
-  { value: "7d", label: "Last 7 days" },
-  { value: "30d", label: "Last 30 days" },
-  { value: "90d", label: "Last 90 days" },
+  { value: "24h", shortLabel: "24h", label: "Last 24 hours" },
+  { value: "7d", shortLabel: "7d", label: "Last 7 days" },
+  { value: "30d", shortLabel: "30d", label: "Last 30 days" },
+  { value: "90d", shortLabel: "90d", label: "Last 90 days" },
 ] as const;
 
 function toggleStatus(status: CallStatus) {
@@ -21,30 +21,34 @@ function toggleStatus(status: CallStatus) {
 </script>
 
 <template>
-  <section class="filters">
-    <label>
-      <span>Date range</span>
-      <select v-model="filters.preset">
-        <option v-for="preset in PRESETS" :key="preset.value" :value="preset.value">{{ preset.label }}</option>
-      </select>
-    </label>
-    <div class="field">
-      <span>Campaigns</span>
-      <CampaignPicker v-model="filters.campaignIds" :campaigns="campaigns" />
+  <section class="filters" aria-label="Filters">
+    <div class="segmented" role="group" aria-label="Date range">
+      <button
+        v-for="preset in PRESETS"
+        :key="preset.value"
+        type="button"
+        :title="preset.label"
+        :aria-label="preset.label"
+        :aria-pressed="filters.preset === preset.value"
+        :class="{ active: filters.preset === preset.value }"
+        @click="filters.preset = preset.value"
+      >
+        {{ preset.shortLabel }}
+      </button>
     </div>
-    <div class="outcomes">
-      <span>Outcome</span>
-      <div class="chips">
-        <button
-          v-for="status in ALL_STATUSES"
-          :key="status"
-          type="button"
-          :class="{ active: filters.statuses.includes(status) }"
-          @click="toggleStatus(status)"
-        >
-          {{ STATUS_LABELS[status] }}
-        </button>
-      </div>
+    <CampaignPicker v-model="filters.campaignIds" :campaigns="campaigns" />
+    <span class="divider" aria-hidden="true"></span>
+    <div class="chips" role="group" aria-label="Outcome">
+      <button
+        v-for="status in ALL_STATUSES"
+        :key="status"
+        type="button"
+        :class="[status, { active: filters.statuses.includes(status) }]"
+        :aria-pressed="filters.statuses.includes(status)"
+        @click="toggleStatus(status)"
+      >
+        {{ STATUS_LABELS[status] }}
+      </button>
     </div>
     <button
       v-if="filters.campaignIds.length || filters.statuses.length"
@@ -61,50 +65,79 @@ function toggleStatus(status: CallStatus) {
 .filters {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 16px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 12px 16px;
+  align-items: center;
+  gap: 10px;
 }
-label,
-.field,
-.outcomes {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 13px;
-  color: var(--muted);
-}
-select {
-  font: inherit;
-  color: var(--text);
-  background: var(--background);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 6px 8px;
+.divider {
+  width: 1px;
+  height: 20px;
+  background: var(--border-strong);
 }
 .chips {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
 }
-.chips button,
-.clear {
-  font: inherit;
+.chips button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted);
+  background: var(--surface);
   border: 1px solid var(--border);
-  background: var(--background);
-  color: var(--text);
   border-radius: 999px;
-  padding: 5px 12px;
+  padding: 5px 12px 5px 10px;
   cursor: pointer;
+  transition: color 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
+}
+.chips button::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--chip-color);
+}
+.chips button:hover {
+  color: var(--text);
+  border-color: var(--border-strong);
+}
+.chips .missed {
+  --chip-color: var(--missed);
+  --chip-soft: var(--missed-soft);
+  --chip-ink: var(--missed-ink);
+}
+.chips .connected {
+  --chip-color: var(--connected);
+  --chip-soft: var(--connected-soft);
+  --chip-ink: var(--connected-ink);
+}
+.chips .converted {
+  --chip-color: var(--converted);
+  --chip-soft: var(--converted-soft);
+  --chip-ink: var(--converted-ink);
 }
 .chips button.active {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: white;
+  color: var(--chip-ink);
+  background: var(--chip-soft);
+  border-color: var(--chip-color);
 }
 .clear {
-  border-style: dashed;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--accent-ink);
+  background: none;
+  border: none;
+  padding: 5px 6px;
+  cursor: pointer;
+}
+.clear:hover {
+  text-decoration: underline;
+}
+@media (max-width: 640px) {
+  .divider {
+    display: none;
+  }
 }
 </style>
