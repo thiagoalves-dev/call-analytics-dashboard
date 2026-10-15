@@ -35,3 +35,5 @@ and the frontend.
 2. Each endpoint's test file is ordered: authentication → validation → happy path.
 3. Requests go through helpers in `tests/helpers.py` (`send_volume_request(...)`), not raw client calls.
 4. Pin every attribute an assertion depends on; never rely on random fixture data.
+5. Test files may group tests in long `describe`/module blocks; each individual test stays at most 20 lines
+   (tests are exempt from the 20-line rule only for grouping).

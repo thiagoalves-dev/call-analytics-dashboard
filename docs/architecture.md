@@ -76,6 +76,8 @@ on AWS RDS / Aurora:
   it as a standalone table, moves that day's rows out of `calls_default` into it, then attaches it. Attaching
   takes a lighter lock than `CREATE TABLE … PARTITION OF` and never fails on rows already in the default
   partition. On RDS, `pg_partman` + `pg_cron` could take over this job.
+  The partitions are not in the models: `migrations/env.py` tells Alembic to skip the `calls_*` tables, so
+  `alembic check` compares only what the models declare (the parent table, its indexes and identity column).
 - **`call_stats_hourly`, a rollup table kept up to date on insert.** Every new call runs an upsert in the
   same transaction: insert the (account, hour, campaign) row or add 1 to its counters. The charts read at
   most 24 rows per campaign per day, and the numbers are exact the moment the call is committed. A late
@@ -128,7 +130,12 @@ calls. A heartbeat comment every
   `Authorization` header because the browser's `EventSource` can't send custom headers. httpOnly keeps the
   token away from JavaScript (XSS); `SameSite=Lax` blocks cross-site POSTs (CSRF). An unknown email is
   still checked against a fixed bcrypt hash, so response time doesn't reveal which emails are registered.
-  A valid cookie whose user or account no longer exists gets `401`.
+  Every request checks that the cookie's user still exists in its account (one primary-key lookup), so a
+  deleted user gets `401` on every endpoint, not only `/me`, instead of reading stats until the cookie
+  expires. The check uses its own short session, so the SSE stream doesn't hold a database connection while
+  it stays open.
+- **Secrets:** the demo JWT secret is only accepted when `ENVIRONMENT` is `local` (the default). With any
+  other value the API refuses to start unless `JWT_SECRET` is set to something else.
 - **Simulator:** an API key per account in the `X-API-Key` header.
 
 ### Filters
@@ -136,6 +143,11 @@ calls. A heartbeat comment every
 Date range, campaigns and outcomes apply to the volume chart and the feed. The **conversion rate ignores
 the outcome filter**: a conversion rate over only missed calls is always 0% and means nothing. The UI says
 so under the chart. Live calls are filtered in the browser, so changing a filter doesn't reopen the stream.
+
+The charts and the feed read the date range differently, on purpose. The **charts count whole buckets**:
+the range is widened to every hour (hourly view and conversion) or local day (daily view) it touches, in
+one place (`Bucketing.covering`), because the rollup only knows whole hours and a bar for a partial hour
+would look like a dip. The **feed uses the exact range**: it reads raw calls, so there is nothing to round.
 
 ## Code organization
 
