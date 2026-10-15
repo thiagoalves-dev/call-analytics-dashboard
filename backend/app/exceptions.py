@@ -4,3 +4,11 @@ class UnprocessableError(ValueError):
 
 class AuthenticationError(Exception):
     pass
+
+
+class ConflictError(ValueError):
+    pass
+
+
+class IncompleteSeedError(RuntimeError):
+    pass

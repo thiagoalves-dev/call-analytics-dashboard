@@ -5,8 +5,8 @@ from sqlalchemy import Row, select, true
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.dependencies.call_filter import CallFilter
 from app.models import Call, Campaign
+from app.schemas.call_filter import CallFilter
 
 
 async def insert_unless_duplicate(session: AsyncSession, values: dict) -> Call | None:
@@ -21,14 +21,15 @@ async def insert_unless_duplicate(session: AsyncSession, values: dict) -> Call |
     return await session.scalar(statement)
 
 
-async def find_by_external_id(
+async def find_with_campaign_by_external_id(
     session: AsyncSession, account_id: int, external_id: str, started_at: datetime
-) -> Call | None:
-    return await session.scalar(
-        select(Call).where(
-            Call.account_id == account_id, Call.external_id == external_id, Call.started_at == started_at
-        )
+) -> Row[tuple[Call, Campaign]] | None:
+    query = (
+        select(Call, Campaign)
+        .join(Campaign, Campaign.id == Call.campaign_id)
+        .where(Call.account_id == account_id, Call.external_id == external_id, Call.started_at == started_at)
     )
+    return (await session.execute(query)).first()
 
 
 async def most_recent(

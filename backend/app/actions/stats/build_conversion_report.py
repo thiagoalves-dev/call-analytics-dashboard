@@ -2,9 +2,9 @@ from sqlalchemy import Row
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import InstrumentedAttribute
 
-from app.dependencies.call_filter import CallFilter
 from app.models import Campaign
 from app.repositories import call_stats_repository
+from app.schemas.call_filter import CallFilter
 from app.schemas.stats import ConversionGrouping, ConversionResponse, ConversionRow
 from app.support.time import start_of_hour
 

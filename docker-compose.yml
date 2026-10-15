@@ -84,6 +84,7 @@ services:
     environment:
       <<: *api-environment
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/calls_test
+      LIVE_CHANNEL_PREFIX: "test-calls:"
     depends_on:
       db:
         condition: service_healthy

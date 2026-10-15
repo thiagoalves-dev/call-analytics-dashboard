@@ -4,16 +4,13 @@ import logging
 from collections import defaultdict
 
 from redis.asyncio import Redis
+from redis.exceptions import RedisError
 
 logger = logging.getLogger(__name__)
 
-CHANNEL_PREFIX = "calls:"
+DEFAULT_CHANNEL_PREFIX = "calls:"
 SUBSCRIBER_QUEUE_SIZE = 100
 RECONNECT_DELAY_SECONDS = 1
-
-
-def channel_for(account_id: int) -> str:
-    return f"{CHANNEL_PREFIX}{account_id}"
 
 
 class Subscriber:
@@ -29,8 +26,9 @@ class Subscriber:
 
 
 class Broadcaster:
-    def __init__(self, redis: Redis) -> None:
+    def __init__(self, redis: Redis, channel_prefix: str = DEFAULT_CHANNEL_PREFIX) -> None:
         self.redis = redis
+        self.channel_prefix = channel_prefix
         self.subscribers: dict[int, set[Subscriber]] = defaultdict(set)
         self.listener: asyncio.Task | None = None
 
@@ -44,7 +42,13 @@ class Broadcaster:
                 await self.listener
 
     async def publish(self, account_id: int, payload: str) -> None:
-        await self.redis.publish(channel_for(account_id), payload)
+        try:
+            await self.redis.publish(self.channel_for(account_id), payload)
+        except RedisError:
+            logger.exception("Could not publish to the live feed of account %s", account_id)
+
+    def channel_for(self, account_id: int) -> str:
+        return f"{self.channel_prefix}{account_id}"
 
     def subscribe(self, account_id: int) -> Subscriber:
         subscriber = Subscriber()
@@ -68,12 +72,21 @@ class Broadcaster:
 
     async def listen(self) -> None:
         pubsub = self.redis.pubsub()
-        await pubsub.psubscribe(f"{CHANNEL_PREFIX}*")
-        async for message in pubsub.listen():
-            if message["type"] == "pmessage":
-                self.dispatch(message["channel"].decode(), message["data"].decode())
+        try:
+            await pubsub.psubscribe(f"{self.channel_prefix}*")
+            self.mark_all_subscribers_behind()
+            async for message in pubsub.listen():
+                if message["type"] == "pmessage":
+                    self.dispatch(message["channel"].decode(), message["data"].decode())
+        finally:
+            await pubsub.aclose()
+
+    def mark_all_subscribers_behind(self) -> None:
+        for subscribers in self.subscribers.values():
+            for subscriber in subscribers:
+                subscriber.fell_behind = True
 
     def dispatch(self, channel: str, payload: str) -> None:
-        account_id = int(channel.removeprefix(CHANNEL_PREFIX))
+        account_id = int(channel.removeprefix(self.channel_prefix))
         for subscriber in list(self.subscribers.get(account_id, ())):
             subscriber.deliver(payload)

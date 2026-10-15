@@ -8,6 +8,7 @@ class Settings(BaseSettings):
 
     database_url: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/calls"
     redis_url: str = "redis://localhost:6379/0"
+    live_channel_prefix: str = "calls:"
 
     jwt_secret: str = "local-demo-only-secret-replace-in-production"
     jwt_ttl_minutes: int = 8 * 60

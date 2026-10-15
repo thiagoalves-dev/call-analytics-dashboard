@@ -11,6 +11,9 @@ logger = logging.getLogger("simulator")
 
 HEALTH_CHECK_INTERVAL_SECONDS = 2
 IDLE_INTERVAL_SECONDS = 5
+REQUEST_TIMEOUT_SECONDS = 10
+SINGLE_DELIVERY = 1
+DUPLICATED_DELIVERY = 2
 
 
 async def wait_for_api(client: httpx.AsyncClient) -> None:
@@ -35,7 +38,7 @@ async def tracking_numbers_by_key(client: httpx.AsyncClient, api_keys: tuple[str
 
 async def send_call(client: httpx.AsyncClient, api_key: str, tracking_number: str, config: SimulatorConfig) -> None:
     call = fake_call(tracking_number)
-    deliveries = 2 if random.random() < config.duplicate_delivery_rate else 1
+    deliveries = DUPLICATED_DELIVERY if random.random() < config.duplicate_delivery_rate else SINGLE_DELIVERY
     for _ in range(deliveries):
         response = await client.post("/api/calls", json=call, headers={"X-API-Key": api_key})
         logger.info(
@@ -44,7 +47,7 @@ async def send_call(client: httpx.AsyncClient, api_key: str, tracking_number: st
 
 
 async def run(config: SimulatorConfig) -> None:
-    async with httpx.AsyncClient(base_url=config.api_url, timeout=10) as client:
+    async with httpx.AsyncClient(base_url=config.api_url, timeout=REQUEST_TIMEOUT_SECONDS) as client:
         await wait_for_api(client)
         numbers = await tracking_numbers_by_key(client, config.api_keys)
         while True:

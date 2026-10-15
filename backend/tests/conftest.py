@@ -12,16 +12,27 @@ from app.db import engine
 from app.main import app
 from app.services.broadcaster import Broadcaster
 
-TABLES = "accounts, users, api_keys, campaigns, calls, call_stats_hourly"
+TABLES = "accounts, users, api_keys, campaigns, calls, call_stats_hourly, seed_runs"
+TEST_DATABASE_SUFFIX = "_test"
 
 
 @pytest.fixture(scope="session", autouse=True)
 async def database():
     database_url = make_url(get_settings().database_url)
+    ensure_disposable(database_url.database)
     await recreate_database(database_url)
     subprocess.run(["alembic", "upgrade", "head"], check=True)
     yield
     await engine.dispose()
+
+
+def ensure_disposable(database_name: str) -> None:
+    if not database_name.endswith(TEST_DATABASE_SUFFIX):
+        pytest.exit(
+            f"Refusing to drop database {database_name!r}: the tests only run against a database whose name "
+            f"ends with {TEST_DATABASE_SUFFIX!r}",
+            returncode=pytest.ExitCode.USAGE_ERROR,
+        )
 
 
 async def recreate_database(database_url) -> None:
@@ -46,8 +57,9 @@ async def session():
 
 @pytest.fixture(scope="session")
 async def broadcaster():
-    redis = Redis.from_url(get_settings().redis_url)
-    broadcaster = Broadcaster(redis)
+    settings = get_settings()
+    redis = Redis.from_url(settings.redis_url)
+    broadcaster = Broadcaster(redis, settings.live_channel_prefix)
     await broadcaster.start()
     app.state.broadcaster = broadcaster
     yield broadcaster

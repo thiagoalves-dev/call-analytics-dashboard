@@ -4,7 +4,9 @@ import pytest
 
 from app.models import CallStatus
 from tests.factories import create_account, create_call, create_campaign, create_user
-from tests.helpers import log_in, send_volume_request
+from tests.helpers import log_in, send_volume_request, use_session_token
+
+MISSING_ID = 999_999
 
 
 @pytest.fixture
@@ -25,6 +27,15 @@ def counts_by_bucket(response) -> dict[str, int]:
 
 async def test_rejects_unauthenticated_requests(client):
     assert (await send_volume_request(client)).status_code == 401
+
+
+async def test_rejects_a_session_for_an_account_that_no_longer_exists(client):
+    use_session_token(client, user_id=MISSING_ID, account_id=MISSING_ID)
+
+    response = await send_volume_request(client)
+
+    assert response.status_code == 401
+    assert response.json() == {"detail": "Invalid or expired session"}
 
 
 async def test_rejects_an_hourly_view_longer_than_31_days(client, acme):
@@ -59,6 +70,22 @@ async def test_hourly_view_counts_calls_per_hour_and_fills_empty_hours(client, s
     }
 
 
+async def test_hourly_view_reports_whole_hours_when_the_range_is_not_on_the_hour(client, session, campaign):
+    await create_call(session, campaign, datetime(2026, 10, 1, 9, 10, tzinfo=UTC))
+    await create_call(session, campaign, datetime(2026, 10, 1, 10, 40, tzinfo=UTC))
+    await create_call(session, campaign, datetime(2026, 10, 1, 11, 20, tzinfo=UTC))
+    await log_in(client, "manager@acme.test")
+    params = {"granularity": "hour", "from": "2026-10-01T09:30:00Z", "to": "2026-10-01T11:15:00Z"}
+
+    response = await send_volume_request(client, params)
+
+    assert counts_by_bucket(response) == {
+        "2026-10-01T09:00:00Z": 1,
+        "2026-10-01T10:00:00Z": 1,
+        "2026-10-01T11:00:00Z": 1,
+    }
+
+
 async def test_daily_view_cuts_days_at_the_accounts_local_midnight(client, session, campaign):
     await create_call(session, campaign, datetime(2026, 10, 2, 4, 30, tzinfo=UTC))
     await create_call(session, campaign, datetime(2026, 10, 2, 5, 30, tzinfo=UTC))
@@ -68,6 +95,28 @@ async def test_daily_view_cuts_days_at_the_accounts_local_midnight(client, sessi
     response = await send_volume_request(client, params)
 
     assert counts_by_bucket(response) == {"2026-10-01T00:00:00-05:00": 1, "2026-10-02T00:00:00-05:00": 1}
+
+
+async def test_daily_view_reports_whole_local_days_when_the_range_is_not_on_midnight(client, session, campaign):
+    await create_call(session, campaign, datetime(2026, 10, 1, 6, tzinfo=UTC))
+    await create_call(session, campaign, datetime(2026, 10, 2, 10, tzinfo=UTC))
+    await log_in(client, "manager@acme.test")
+    params = {"granularity": "day", "from": "2026-10-01T12:00:00Z", "to": "2026-10-02T12:00:00Z"}
+
+    response = await send_volume_request(client, params)
+
+    assert counts_by_bucket(response) == {"2026-10-01T00:00:00-05:00": 1, "2026-10-02T00:00:00-05:00": 1}
+
+
+async def test_daily_view_handles_the_day_daylight_saving_time_starts(client, session, campaign):
+    await create_call(session, campaign, datetime(2026, 3, 9, 4, 30, tzinfo=UTC))
+    await create_call(session, campaign, datetime(2026, 3, 9, 5, 30, tzinfo=UTC))
+    await log_in(client, "manager@acme.test")
+    params = {"granularity": "day", "from": "2026-03-08T06:00:00Z", "to": "2026-03-10T05:00:00Z"}
+
+    response = await send_volume_request(client, params)
+
+    assert counts_by_bucket(response) == {"2026-03-08T00:00:00-06:00": 1, "2026-03-09T00:00:00-05:00": 1}
 
 
 async def test_daily_view_handles_the_day_daylight_saving_time_ends(client, session, campaign):

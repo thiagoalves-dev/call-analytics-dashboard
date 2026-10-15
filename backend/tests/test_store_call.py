@@ -1,12 +1,18 @@
 import asyncio
 from datetime import UTC, datetime, timedelta
+from unittest.mock import AsyncMock
 
 import pytest
+from redis.exceptions import ConnectionError as RedisConnectionError
 from sqlalchemy import func, select
 
+from app.main import app
 from app.models import Call, call_stats_hourly
+from app.services.broadcaster import Broadcaster
 from tests.factories import create_account, create_api_key, create_campaign
 from tests.helpers import send_store_call_request
+
+NO_EVENT_WAIT_SECONDS = 0.5
 
 
 def call_payload(**overrides) -> dict:
@@ -31,6 +37,13 @@ async def acme(session):
 @pytest.fixture
 async def api_key(session, acme):
     return await create_api_key(session, acme, key="acme-key")
+
+
+@pytest.fixture
+def unreachable_redis(monkeypatch):
+    redis = AsyncMock()
+    redis.publish.side_effect = RedisConnectionError("Redis is down")
+    monkeypatch.setattr(app.state, "broadcaster", Broadcaster(redis))
 
 
 async def count_calls(session) -> int:
@@ -93,6 +106,27 @@ async def test_rejects_an_unknown_status(client, api_key):
     assert (await send_store_call_request(client, call_payload(status="voicemail"), api_key)).status_code == 422
 
 
+@pytest.mark.parametrize(
+    "changed",
+    [
+        {"tracking_number": "+15550000002"},
+        {"status": "missed"},
+        {"duration_seconds": 96},
+        {"caller_number": "+15550001111"},
+    ],
+)
+async def test_rejects_a_retry_whose_data_differs_from_the_stored_call(client, session, acme, api_key, changed):
+    await create_campaign(session, acme, name="Radio", tracking_number="+15550000002")
+    payload = call_payload()
+    await send_store_call_request(client, payload, api_key)
+
+    response = await send_store_call_request(client, payload | changed, api_key)
+
+    assert response.status_code == 409
+    assert "already stored with different call data" in response.json()["detail"]
+    assert await count_calls(session) == 1
+
+
 async def test_stores_the_call_under_the_api_keys_account(client, session, acme, api_key):
     response = await send_store_call_request(client, call_payload(), api_key)
 
@@ -111,6 +145,28 @@ async def test_publishes_the_new_call_to_the_accounts_live_feed(client, broadcas
         broadcaster.unsubscribe(acme.id, subscriber)
 
     assert '"external_id":"provider-call-1"' in payload
+
+
+async def test_stores_the_call_even_when_the_live_feed_is_unavailable(client, session, api_key, unreachable_redis):
+    response = await send_store_call_request(client, call_payload(), api_key)
+
+    assert response.status_code == 201
+    assert await count_calls(session) == 1
+
+
+async def test_an_identical_retry_is_not_published_again(client, broadcaster, acme, api_key):
+    payload = call_payload()
+    subscriber = broadcaster.subscribe(acme.id)
+    try:
+        first = await send_store_call_request(client, payload, api_key)
+        await asyncio.wait_for(subscriber.queue.get(), timeout=2)
+        retry = await send_store_call_request(client, payload, api_key)
+        with pytest.raises(TimeoutError):
+            await asyncio.wait_for(subscriber.queue.get(), timeout=NO_EVENT_WAIT_SECONDS)
+    finally:
+        broadcaster.unsubscribe(acme.id, subscriber)
+
+    assert (retry.status_code, retry.json()) == (200, first.json())
 
 
 async def test_a_retried_delivery_is_stored_once_and_returns_200(client, session, api_key):
@@ -134,4 +190,24 @@ async def test_a_retried_delivery_is_counted_once_in_the_hourly_rollup(client, s
     await send_store_call_request(client, payload, api_key)
     await send_store_call_request(client, payload, api_key)
 
+    assert await hourly_totals(session) == [(1, 1)]
+
+
+async def test_two_calls_in_the_same_hour_and_campaign_add_up_in_the_hourly_rollup(client, session, api_key):
+    started_at = (datetime.now(UTC) - timedelta(minutes=3)).isoformat()
+    await send_store_call_request(client, call_payload(external_id="provider-call-1", started_at=started_at), api_key)
+    await send_store_call_request(client, call_payload(external_id="provider-call-2", started_at=started_at), api_key)
+
+    assert await hourly_totals(session) == [(2, 2)]
+
+
+async def test_concurrent_deliveries_of_the_same_call_are_stored_and_counted_once(client, session, api_key):
+    payload = call_payload()
+
+    responses = await asyncio.gather(
+        send_store_call_request(client, payload, api_key), send_store_call_request(client, payload, api_key)
+    )
+
+    assert sorted(response.status_code for response in responses) == [200, 201]
+    assert await count_calls(session) == 1
     assert await hourly_totals(session) == [(1, 1)]

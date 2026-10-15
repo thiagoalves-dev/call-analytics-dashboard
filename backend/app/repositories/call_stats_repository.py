@@ -5,8 +5,8 @@ from sqlalchemy import ColumnElement, Row, func, literal, select, true
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.dependencies.call_filter import CallFilter
 from app.models import Call, CallStatus, Campaign, call_stats_hourly
+from app.schemas.call_filter import CallFilter
 from app.support.time import start_of_hour
 
 COUNTERS = ("total", *(call_status.value for call_status in CallStatus), "duration_seconds")

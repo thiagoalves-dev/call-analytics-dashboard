@@ -21,11 +21,8 @@ MAX_PAGE_SIZE = 200
 async def store_call(
     body: StoreCallRequest, account: IngestAccount, session: Session, request: Request, response: Response
 ) -> CallResponse:
-    stored = await StoreCall(session, account, body)()
-    if stored.created:
-        await request.app.state.broadcaster.publish(account.id, stored.call.model_dump_json())
-    else:
-        response.status_code = status.HTTP_200_OK
+    stored = await StoreCall(session, request.app.state.broadcaster, account, body)()
+    response.status_code = stored.status_code()
     return stored.call
 
 

@@ -4,7 +4,10 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from app.config import get_settings
 
-engine = create_async_engine(get_settings().database_url, pool_size=10, max_overflow=10)
+POOL_SIZE = 10
+MAX_OVERFLOW = 10
+
+engine = create_async_engine(get_settings().database_url, pool_size=POOL_SIZE, max_overflow=MAX_OVERFLOW)
 SessionLocal = async_sessionmaker(engine, expire_on_commit=False)
 
 

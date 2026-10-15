@@ -1,5 +1,7 @@
 from httpx import AsyncClient, Response
 
+from app.config import get_settings
+from app.security import create_access_token
 from tests.factories import DEFAULT_PASSWORD
 
 
@@ -9,6 +11,10 @@ async def send_login_request(client: AsyncClient, email: str, password: str = DE
 
 async def log_in(client: AsyncClient, email: str) -> None:
     (await send_login_request(client, email)).raise_for_status()
+
+
+def use_session_token(client: AsyncClient, user_id: int, account_id: int) -> None:
+    client.cookies.set(get_settings().cookie_name, create_access_token(user_id, account_id))
 
 
 async def send_me_request(client: AsyncClient) -> Response:

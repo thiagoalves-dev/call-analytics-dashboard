@@ -4,10 +4,10 @@ from datetime import datetime, timedelta
 from sqlalchemy import Row
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.dependencies.call_filter import CallFilter
-from app.exceptions import UnprocessableError
+from app.exceptions import AuthenticationError, UnprocessableError
 from app.models import CallStatus
-from app.repositories import call_stats_repository
+from app.repositories import account_repository, call_stats_repository
+from app.schemas.call_filter import CallFilter
 from app.schemas.stats import Granularity, VolumePoint, VolumeResponse
 from app.support.time import local_date, local_midnight, start_of_hour
 
@@ -18,20 +18,27 @@ MAX_HOURLY_RANGE = timedelta(days=31)
 
 class BuildCallVolume:
     def __init__(
-        self, session: AsyncSession, account_id: int, timezone: str, call_filter: CallFilter, granularity: Granularity
+        self, session: AsyncSession, account_id: int, call_filter: CallFilter, granularity: Granularity
     ) -> None:
         self.session = session
         self.account_id = account_id
-        self.timezone = timezone
         self.call_filter = call_filter
         self.granularity = granularity
+        self.timezone = ""
 
     async def __call__(self) -> VolumeResponse:
         if self.granularity.is_hourly() and self.call_filter.spans_more_than(MAX_HOURLY_RANGE):
-            raise UnprocessableError("The hourly view is limited to 31 days; use the daily view")
+            raise UnprocessableError(f"The hourly view is limited to {MAX_HOURLY_RANGE.days} days; use the daily view")
+        self.timezone = await self.account_timezone()
         rows_by_bucket = {row.bucket: row for row in await self.fetch_rows()}
         points = [self.point(bucket, rows_by_bucket.get(bucket)) for bucket in self.buckets()]
         return VolumeResponse(granularity=self.granularity, timezone=self.timezone, points=points)
+
+    async def account_timezone(self) -> str:
+        timezone = await account_repository.timezone_of(self.session, self.account_id)
+        if timezone is None:
+            raise AuthenticationError("Invalid or expired session")
+        return timezone
 
     async def fetch_rows(self) -> Sequence[Row]:
         if self.granularity.is_hourly():

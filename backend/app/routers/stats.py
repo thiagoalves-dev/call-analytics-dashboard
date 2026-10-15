@@ -5,7 +5,6 @@ from app.actions.stats.build_conversion_report import BuildConversionReport
 from app.dependencies.auth import CurrentPrincipal
 from app.dependencies.call_filter import CallFilterQuery
 from app.dependencies.database import Session
-from app.repositories import account_repository
 from app.schemas.stats import ConversionGrouping, ConversionResponse, Granularity, VolumeResponse
 
 router = APIRouter(prefix="/api/stats", tags=["stats"])
@@ -18,8 +17,7 @@ async def volume(
     call_filter: CallFilterQuery,
     granularity: Granularity = Granularity.HOUR,
 ) -> VolumeResponse:
-    timezone = await account_repository.timezone_of(session, principal.account_id)
-    return await BuildCallVolume(session, principal.account_id, timezone, call_filter, granularity)()
+    return await BuildCallVolume(session, principal.account_id, call_filter, granularity)()
 
 
 @router.get("/conversion")

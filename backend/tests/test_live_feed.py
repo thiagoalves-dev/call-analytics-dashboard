@@ -1,8 +1,32 @@
 import asyncio
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
+from redis.exceptions import ConnectionError as RedisConnectionError
+
+from app.services import broadcaster as broadcaster_module
 from app.services import live_feed
-from app.services.broadcaster import SUBSCRIBER_QUEUE_SIZE, Broadcaster, Subscriber, channel_for
+from app.services.broadcaster import SUBSCRIBER_QUEUE_SIZE, Broadcaster, Subscriber
+
+ACCOUNT_ID = 1
+
+
+class FakePubSub:
+    def __init__(self, connection_works: bool) -> None:
+        self.connection_works = connection_works
+        self.subscribed = asyncio.Event()
+        self.closed = False
+
+    async def psubscribe(self, pattern: str) -> None:
+        if not self.connection_works:
+            raise RedisConnectionError("Connection lost")
+        self.subscribed.set()
+
+    async def listen(self):
+        await asyncio.Event().wait()
+        yield {}
+
+    async def aclose(self) -> None:
+        self.closed = True
 
 
 def broadcaster_without_redis() -> Broadcaster:
@@ -14,7 +38,7 @@ async def test_dispatch_delivers_only_to_the_accounts_subscribers():
     acme = broadcaster.subscribe(1)
     summit = broadcaster.subscribe(2)
 
-    broadcaster.dispatch(channel_for(1), '{"id": 7}')
+    broadcaster.dispatch(broadcaster.channel_for(1), '{"id": 7}')
 
     assert acme.queue.get_nowait() == '{"id": 7}'
     assert summit.queue.empty()
@@ -61,6 +85,34 @@ async def test_the_stream_stops_and_unsubscribes_when_the_browser_disconnects():
 
     assert events == ["retry: 3000\n\n"]
     assert broadcaster.subscribers == {}
+
+
+async def test_the_stream_ends_when_the_subscriber_falls_behind():
+    broadcaster = broadcaster_without_redis()
+    request = AsyncMock()
+    request.is_disconnected.return_value = False
+    events = live_feed.call_events(broadcaster, ACCOUNT_ID, request)
+
+    assert await anext(events) == "retry: 3000\n\n"
+    broadcaster.mark_all_subscribers_behind()
+
+    assert [event async for event in events] == []
+    assert broadcaster.subscribers == {}
+
+
+async def test_a_reconnect_closes_the_lost_subscription_and_flags_every_subscriber(monkeypatch):
+    monkeypatch.setattr(broadcaster_module, "RECONNECT_DELAY_SECONDS", 0)
+    lost, healthy = FakePubSub(connection_works=False), FakePubSub(connection_works=True)
+    broadcaster = Broadcaster(redis=MagicMock(pubsub=MagicMock(side_effect=[lost, healthy])))
+    subscriber = broadcaster.subscribe(ACCOUNT_ID)
+
+    await broadcaster.start()
+    await asyncio.wait_for(healthy.subscribed.wait(), timeout=2)
+    await broadcaster.stop()
+
+    assert lost.closed
+    assert healthy.closed
+    assert subscriber.fell_behind
 
 
 async def test_published_calls_reach_subscribers_through_redis(broadcaster):

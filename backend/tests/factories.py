@@ -51,8 +51,18 @@ async def create_call(
     status: CallStatus = CallStatus.CONNECTED,
     duration_seconds: int | None = None,
 ) -> Call:
-    duration_seconds = duration_seconds if duration_seconds is not None else default_duration(status)
-    call = Call(
+    call = build_call(
+        campaign, started_at, status, default_duration(status) if duration_seconds is None else duration_seconds
+    )
+    session.add(call)
+    await session.flush()
+    await call_stats_repository.record_call(session, call)
+    await session.commit()
+    return call
+
+
+def build_call(campaign: Campaign, started_at: datetime, status: CallStatus, duration_seconds: int) -> Call:
+    return Call(
         account_id=campaign.account_id,
         campaign_id=campaign.id,
         caller_number="+15551234567",
@@ -61,11 +71,6 @@ async def create_call(
         ended_at=started_at + timedelta(seconds=duration_seconds),
         status=status,
     )
-    session.add(call)
-    await session.flush()
-    await call_stats_repository.record_call(session, call)
-    await session.commit()
-    return call
 
 
 def default_duration(status: CallStatus) -> int:

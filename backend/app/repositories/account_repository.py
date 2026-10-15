@@ -1,4 +1,4 @@
-from sqlalchemy import select
+from sqlalchemy import exists, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Account, ApiKey
@@ -13,5 +13,9 @@ async def find_by_active_api_key(session: AsyncSession, api_key: str) -> Account
     )
 
 
-async def timezone_of(session: AsyncSession, account_id: int) -> str:
+async def timezone_of(session: AsyncSession, account_id: int) -> str | None:
     return await session.scalar(select(Account.timezone).where(Account.id == account_id))
+
+
+async def any_exists(session: AsyncSession) -> bool:
+    return await session.scalar(select(exists().select_from(Account)))

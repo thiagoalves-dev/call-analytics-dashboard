@@ -2,9 +2,10 @@ from datetime import UTC, datetime, timedelta
 
 import jwt
 
+from app.actions.auth import login
 from app.config import get_settings
 from tests.factories import create_account, create_user
-from tests.helpers import log_in, send_login_request, send_me_request
+from tests.helpers import log_in, send_login_request, send_me_request, use_session_token
 
 FORGING_SECRET = "a-different-secret-that-is-long-enough"
 
@@ -34,6 +35,19 @@ async def test_rejects_an_expired_session_cookie(client, session):
     assert (await send_me_request(client)).status_code == 401
 
 
+async def test_rejects_a_session_cookie_for_a_deleted_user(client, session):
+    account = await create_account(session)
+    user = await create_user(session, account)
+    use_session_token(client, user.id, account.id)
+    await session.delete(user)
+    await session.commit()
+
+    response = await send_me_request(client)
+
+    assert response.status_code == 401
+    assert response.json() == {"detail": "Invalid or expired session"}
+
+
 async def test_rejects_a_wrong_password(client, session):
     await create_user(session, await create_account(session), email="manager@acme.test")
 
@@ -50,12 +64,27 @@ async def test_rejects_an_unknown_email_with_the_same_message(client):
     assert response.json() == {"detail": "Invalid email or password"}
 
 
+async def test_checks_a_password_hash_even_when_the_email_is_unknown(client, monkeypatch):
+    checked_hashes = []
+
+    def record_check(password: str, password_hash: str) -> bool:
+        checked_hashes.append(password_hash)
+        return False
+
+    monkeypatch.setattr(login, "verify_password", record_check)
+
+    await send_login_request(client, "nobody@acme.test")
+
+    assert checked_hashes == [login.DUMMY_PASSWORD_HASH]
+
+
 async def test_login_sets_an_http_only_session_cookie(client, session):
     await create_user(session, await create_account(session), email="manager@acme.test")
 
     response = await send_login_request(client, "  Manager@Acme.test ")
 
     assert response.status_code == 200
+    assert response.json()["email"] == "manager@acme.test"
     assert "httponly" in response.headers["set-cookie"].lower()
     assert "samesite=lax" in response.headers["set-cookie"].lower()
 
