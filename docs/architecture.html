@@ -1,34 +1,36 @@
 <!doctype html>
 <html><head><meta charset="utf-8">
-<style>body{margin:0;background:#fff;font-family:Inter,system-ui,sans-serif}#wrap{padding:28px 32px;display:inline-block}h1{font-size:20px;margin:0 0 4px}p{margin:0 0 12px;color:#687385;font-size:13px}</style>
+<style>body{margin:0;background:#fff;font-family:Inter,system-ui,sans-serif}#wrap{padding:28px 36px;display:inline-block}h1{font-size:22px;margin:0 0 4px}p{margin:0 0 16px;color:#687385;font-size:14px}</style>
 <script src="https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.min.js"></script>
 </head><body><div id="wrap">
 <h1>Call Analytics Dashboard — architecture</h1>
-<p>Everything runs with <b>docker compose up</b>. Solid arrows: requests and the live path (1 → 2 → 3). Dashed: reads and setup.</p>
+<p>Everything runs with <b>docker compose up</b>. Numbered arrows follow one new call: 1a + 1b saved in one transaction, 2 announced, 3 pushed to open dashboards.</p>
 <pre class="mermaid">
-flowchart LR
-  UI["<b>Browser</b><br/>Vue 3 dashboard<br/>charts · filters · live feed"]
-  NGINX["<b>frontend</b> · nginx<br/>serves the Vue build<br/>proxies /api (SSE unbuffered)"]
-  API["<b>api</b> · FastAPI ×2 processes<br/>routers → actions → repositories<br/>1 Redis subscription per process"]
+flowchart TB
+  UI["<b>Browser</b> · Vue 3<br/>charts · filters · live feed<br/>refreshes every 10 s"]
   SIM["<b>simulator</b><br/>stands in for the<br/>telephony provider"]
-  REDIS[("<b>Redis</b><br/>pub/sub<br/>channel per account")]
-  subgraph DB["db · PostgreSQL 17 (plain, RDS-compatible)"]
-    CALLS[("<b>calls</b><br/>partitioned<br/>one table per day")]
-    AGG[("<b>call_stats_hourly</b><br/>hourly rollup table")]
-    META[("accounts · users<br/>api_keys · campaigns")]
+  NGINX["<b>frontend</b> · nginx<br/>serves the Vue app<br/>proxies /api, SSE unbuffered"]
+  API["<b>api</b> · FastAPI, 2 processes<br/>routers → actions → repositories<br/>keeps day partitions ahead"]
+  SETUP["<b>setup</b> · once per start<br/>migrations · partitions · seed"]
+  REDIS[("<b>Redis</b><br/>pub/sub, one channel<br/>per company")]
+  subgraph DB[" "]
+    DBLABEL["<b>db</b><br/>plain PostgreSQL 17<br/>works on AWS RDS"]:::label
+    META[("<b>accounts · users</b><br/><b>api_keys · campaigns</b>")]
+    AGG[("<b>call_stats_hourly</b><br/>counters per company,<br/>campaign and hour")]
+    CALLS[("<b>calls</b><br/>one partition per day")]
   end
-  SETUP["<b>setup</b> · one-shot<br/>migrations + bulk seed"]
 
   UI <-- "REST + JWT cookie<br/>Server-Sent Events" --> NGINX
   NGINX <--> API
   SIM -- "POST /api/calls<br/>X-API-Key" --> API
-  API -- "1 · insert call" --> CALLS
-  API -- "1 · +1 to its hour<br/>(same transaction)" --> AGG
   API -- "2 · publish" --> REDIS
-  REDIS -- "3 · fan out to every<br/>API process → SSE" --> API
+  REDIS -- "3 · pushed to open<br/>dashboards over SSE" --> API
+  API -. "auth, campaigns" .-> META
+  API -- "1b · add 1 to<br/>its hour" --> AGG
   AGG -. "charts" .-> API
-  META -. "auth, campaigns" .-> API
-  SETUP -. "partitions + generate_series<br/>backfill + roll-up" .-> CALLS
+  API -- "1a · insert call" --> CALLS
+  SETUP -. "bulk seed" .-> CALLS
+  classDef label fill:none,stroke:none,font-size:17px
 </pre></div>
-<script>mermaid.initialize({startOnLoad:true,theme:"neutral",themeVariables:{fontSize:"17px"},flowchart:{curve:"basis",nodeSpacing:40,rankSpacing:70}});</script>
+<script>mermaid.initialize({startOnLoad:true,theme:"neutral",themeVariables:{fontSize:"16px"},flowchart:{curve:"basis",nodeSpacing:50,rankSpacing:60}});</script>
 </body></html>
