@@ -38,6 +38,18 @@ async def test_rejects_a_session_for_an_account_that_no_longer_exists(client):
     assert response.json() == {"detail": "Invalid or expired session"}
 
 
+async def test_rejects_a_session_for_a_deleted_user_whose_account_still_exists(client, session, acme):
+    user = await create_user(session, acme, email="former@acme.test")
+    use_session_token(client, user.id, acme.id)
+    await session.delete(user)
+    await session.commit()
+
+    response = await send_volume_request(client)
+
+    assert response.status_code == 401
+    assert response.json() == {"detail": "Invalid or expired session"}
+
+
 async def test_rejects_an_hourly_view_longer_than_31_days(client, acme):
     await log_in(client, "manager@acme.test")
     params = {"granularity": "hour", "from": "2026-08-01T00:00:00Z", "to": "2026-10-01T00:00:00Z"}
@@ -84,6 +96,14 @@ async def test_hourly_view_reports_whole_hours_when_the_range_is_not_on_the_hour
         "2026-10-01T10:00:00Z": 1,
         "2026-10-01T11:00:00Z": 1,
     }
+
+
+async def test_hourly_view_ending_on_the_hour_does_not_add_the_next_hour(client, session, campaign):
+    await create_call(session, campaign, datetime(2026, 10, 1, 10, 0, tzinfo=UTC))
+    await log_in(client, "manager@acme.test")
+    params = {"granularity": "hour", "from": "2026-10-01T09:00:00Z", "to": "2026-10-01T10:00:00Z"}
+
+    assert counts_by_bucket(await send_volume_request(client, params)) == {"2026-10-01T09:00:00Z": 0}
 
 
 async def test_daily_view_cuts_days_at_the_accounts_local_midnight(client, session, campaign):

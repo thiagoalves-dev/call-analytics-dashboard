@@ -24,7 +24,20 @@ async def test_rejects_a_range_that_ends_before_it_starts(client, acme):
     await log_in(client, "manager@acme.test")
     params = {"from": "2026-10-02T00:00:00Z", "to": "2026-10-01T00:00:00Z"}
 
-    assert (await send_list_calls_request(client, params)).status_code == 422
+    response = await send_list_calls_request(client, params)
+
+    assert response.status_code == 422
+    assert response.json() == {"detail": "from must be before to"}
+
+
+async def test_rejects_a_range_longer_than_366_days(client, acme):
+    await log_in(client, "manager@acme.test")
+    params = {"from": "2025-01-01T00:00:00Z", "to": "2026-10-01T00:00:00Z"}
+
+    response = await send_list_calls_request(client, params)
+
+    assert response.status_code == 422
+    assert response.json() == {"detail": "The date range is limited to 366 days"}
 
 
 async def test_rejects_a_limit_above_the_maximum(client, acme):
@@ -53,6 +66,19 @@ async def test_orders_by_when_the_call_ended(client, session, acme):
     calls = (await send_list_calls_request(client, RANGE)).json()
 
     assert [call["ended_at"] for call in calls] == ["2026-10-01T09:10:00Z", "2026-10-01T09:05:00Z"]
+
+
+async def test_uses_the_exact_range_without_rounding_to_whole_hours(client, session, acme):
+    campaign = await create_campaign(session, acme)
+    await create_call(session, campaign, datetime(2026, 10, 1, 9, 10, tzinfo=UTC))
+    await create_call(session, campaign, datetime(2026, 10, 1, 9, 40, tzinfo=UTC))
+    await create_call(session, campaign, datetime(2026, 10, 1, 10, 20, tzinfo=UTC))
+    await log_in(client, "manager@acme.test")
+    params = {"from": "2026-10-01T09:30:00Z", "to": "2026-10-01T10:15:00Z"}
+
+    calls = (await send_list_calls_request(client, params)).json()
+
+    assert [call["started_at"] for call in calls] == ["2026-10-01T09:40:00Z"]
 
 
 async def test_filters_by_campaign_and_outcome(client, session, acme):

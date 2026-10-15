@@ -5,9 +5,10 @@ import jwt
 from fastapi import Depends, Header, HTTPException, Request, status
 
 from app.config import get_settings
+from app.db import SessionLocal
 from app.dependencies.database import Session
 from app.models import Account
-from app.repositories import account_repository
+from app.repositories import account_repository, user_repository
 from app.security import decode_access_token
 
 
@@ -17,7 +18,16 @@ class Principal:
     account_id: int
 
 
-def current_principal(request: Request) -> Principal:
+async def current_principal(request: Request) -> Principal:
+    principal = principal_from_cookie(request)
+    async with SessionLocal() as session:
+        user_exists = await user_repository.exists_in_account(session, principal.user_id, principal.account_id)
+    if not user_exists:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid or expired session")
+    return principal
+
+
+def principal_from_cookie(request: Request) -> Principal:
     token = request.cookies.get(get_settings().cookie_name)
     if not token:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Not authenticated")

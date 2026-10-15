@@ -11,7 +11,7 @@ from app.models import Account, ApiKey, Campaign, User
 from app.repositories import account_repository, seed_run_repository
 from app.security import hash_api_key, hash_password
 from app.seed.demo_accounts import DEMO_ACCOUNTS, DemoAccount
-from app.seed.traffic_plan import CampaignHour, campaign_hours, hourly_slots
+from app.seed.traffic_plan import CampaignHour, HourlySlot, campaign_hours, hourly_slots
 from app.support.time import local_date, local_midnight
 
 logger = logging.getLogger(__name__)
@@ -26,10 +26,10 @@ INCOMPLETE_SEED_MESSAGE = (
 
 
 class Seeder:
-    def __init__(self, engine: AsyncEngine, settings: Settings) -> None:
+    def __init__(self, engine: AsyncEngine, settings: Settings, now: datetime | None = None) -> None:
         self.engine = engine
         self.settings = settings
-        self.now = datetime.now(UTC)
+        self.now = now or datetime.now(UTC)
 
     async def __call__(self) -> None:
         async with AsyncSession(self.engine, expire_on_commit=False) as session:
@@ -49,9 +49,10 @@ class Seeder:
         account = await self.create_account(session, demo_account)
         campaigns = await self.create_campaigns(session, account, demo_account)
         await session.commit()
-        calls_per_weight = self.settings.seed_calls_per_account / self.total_weight(demo_account.timezone)
-        for day in self.days(demo_account.timezone):
-            hours = campaign_hours(hourly_slots(day, demo_account.timezone, self.now), calls_per_weight, campaigns)
+        plan = self.traffic_plan(demo_account.timezone)
+        calls_per_weight = self.calls_per_weight(plan)
+        for day, slots in plan.items():
+            hours = campaign_hours(slots, calls_per_weight, campaigns)
             await self.insert_calls(session, account.id, hours)
             await self.roll_up_day(session, account.id, day, demo_account.timezone)
             logger.info("%s: seeded %s", demo_account.name, day)
@@ -87,8 +88,12 @@ class Seeder:
         today = local_date(self.now, timezone)
         return [today - offset * ONE_DAY for offset in reversed(range(self.settings.seed_days))]
 
-    def total_weight(self, timezone: str) -> float:
-        return sum(slot.weight for day in self.days(timezone) for slot in hourly_slots(day, timezone, self.now))
+    def traffic_plan(self, timezone: str) -> dict[date, list[HourlySlot]]:
+        return {day: hourly_slots(day, timezone, self.now) for day in self.days(timezone)}
+
+    def calls_per_weight(self, plan: dict[date, list[HourlySlot]]) -> float:
+        total_weight = sum(slot.weight for slots in plan.values() for slot in slots)
+        return self.settings.seed_calls_per_account / total_weight if total_weight else 0
 
     async def insert_calls(self, session: AsyncSession, account_id: int, hours: list[CampaignHour]) -> None:
         await session.execute(

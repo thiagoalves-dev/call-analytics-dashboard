@@ -44,6 +44,20 @@ async def test_conversion_rate_is_converted_calls_over_all_calls(client, session
     assert (row["label"], row["calls"], row["converted"], row["conversion_rate"]) == ("Google", 4, 1, 0.25)
 
 
+async def test_counts_whole_hours_when_the_range_is_not_on_the_hour(client, session, acme):
+    campaign = await create_campaign(session, acme)
+    await create_call(session, campaign, datetime(2026, 10, 1, 8, 50, tzinfo=UTC))
+    await create_call(session, campaign, datetime(2026, 10, 1, 9, 10, tzinfo=UTC))
+    await create_call(session, campaign, datetime(2026, 10, 1, 10, 40, tzinfo=UTC))
+    await create_call(session, campaign, datetime(2026, 10, 1, 11, 5, tzinfo=UTC))
+    await log_in(client, "manager@acme.test")
+    params = {"from": "2026-10-01T09:30:00Z", "to": "2026-10-01T10:15:00Z"}
+
+    row = (await send_conversion_request(client, params)).json()["rows"][0]
+
+    assert row["calls"] == 2
+
+
 async def test_groups_campaigns_by_marketing_source(client, session, acme):
     search = await create_campaign(session, acme, name="Search", source="Google Ads", tracking_number="+15550000001")
     display = await create_campaign(session, acme, name="Display", source="Google Ads", tracking_number="+15550000002")

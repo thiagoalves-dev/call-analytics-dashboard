@@ -1,9 +1,10 @@
 from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
-from fastapi import Depends, HTTPException, Query, status
+from fastapi import Depends, Query
 from pydantic import AwareDatetime
 
+from app.exceptions import UnprocessableError
 from app.models import CallStatus
 from app.schemas.call_filter import CallFilter
 
@@ -27,11 +28,9 @@ def call_filter(
 
 def ensure_valid_range(start: datetime, end: datetime) -> None:
     if start >= end:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "from must be before to")
+        raise UnprocessableError("from must be before to")
     if end - start > MAX_RANGE:
-        raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_CONTENT, f"The date range is limited to {MAX_RANGE.days} days"
-        )
+        raise UnprocessableError(f"The date range is limited to {MAX_RANGE.days} days")
 
 
 CallFilterQuery = Annotated[CallFilter, Depends(call_filter)]
