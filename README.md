@@ -66,12 +66,12 @@ A dashboard that shows a marketing manager how their inbound calls are doing: ca
 - **Backend:** FastAPI on plain PostgreSQL 17, the same engine as AWS RDS.
 - **Frontend:** Vue 3 + Chart.js, served by nginx.
 - **Simulator:** posts calls to the API the way a telephony provider's webhook would.
+- **Live updates:** Redis passes each new call to every API process, and each one pushes it to its open dashboards over Server-Sent Events.
 - **Two demo companies** share the same tables; each one only sees its own data.
 
 ### Key trade-offs
 
 - **Plain Postgres, so it runs on AWS RDS.** Calls are split into daily partitions, and an hourly counters table keeps the charts fast at 100M calls. The cost: keeping the counters right is our code's job, not the database's. Without the RDS requirement, TimescaleDB would do both out of the box.
-- **Redis + Server-Sent Events for live updates.** The API runs as several processes, and Redis makes sure every process hears about every new call. SSE because the browser only receives data.
 - **Refresh every 10 seconds, not on every call.** Easier to read, and the database load doesn't multiply with every call times every open dashboard.
 - **Shared tables with `account_id` on every row.** The simplest multi-tenant model, and it can be sharded by account later.
 - **httpOnly cookie login for people, API keys for machines.**
