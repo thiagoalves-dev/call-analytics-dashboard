@@ -70,7 +70,7 @@ A dashboard that shows a marketing manager how their inbound calls are doing: ca
 
 ### Key trade-offs
 
-- **Plain Postgres instead of TimescaleDB.** I first built it on TimescaleDB, which gives partitioning and rollups for free, but AWS RDS and Aurora don't offer it, and a company on AWS is far more likely to run RDS. So calls are split into one partition per day, and every insert adds 1 to an hourly rollup table in the same transaction. The charts read that table, so they stay fast at 100M rows (see the benchmarks above). The cost: the rollup is our code, so a real deployment needs a nightly job that checks it against the raw calls.
+- **Plain Postgres, so it runs on AWS RDS.** Calls are split into one partition per day, and every insert adds 1 to an hourly rollup table in the same transaction. The charts read that table, so they stay fast at 100M rows (see the benchmarks above). The cost: the rollup is our code, so a real deployment needs a nightly job that checks it against the raw calls. Without the RDS constraint, TimescaleDB would be a good option: its hypertables and continuous aggregates give the same partitioning and rollups out of the box.
 - **Redis + Server-Sent Events for live updates.** The API runs as several processes, and Redis makes sure every process hears about every new call. SSE because the browser only receives data.
 - **Refresh every 10 seconds, not on every call.** Easier to read, and the database load doesn't multiply with every call times every open dashboard.
 - **Shared tables with `account_id` on every row.** The simplest multi-tenant model, and it can be sharded by account later.

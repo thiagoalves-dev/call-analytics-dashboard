@@ -88,10 +88,10 @@ on AWS RDS / Aurora:
   real deployment would add a nightly job that recomputes recent days from `calls`. At very high ingest,
   many calls updating the same (account, hour, campaign) row compete for its lock; the fix is to queue
   calls and apply the counts in batches every few seconds.
-- **Why not TimescaleDB?** I first built this on TimescaleDB (hypertables + continuous aggregates). It
-  worked well, but AWS RDS / Aurora and Google Cloud SQL don't offer it, and a company already on AWS is far
-  more likely to run RDS than to add a new database vendor. Plain Postgres gives the same dashboard speed
-  (see the benchmarks in the README).
+- **TimescaleDB as an alternative.** If the database didn't have to run on AWS RDS / Aurora (or Google Cloud
+  SQL), TimescaleDB would be a good fit: hypertables give the daily partitions and continuous aggregates give the
+  hourly rollup, both maintained by the database instead of our code. Those managed services don't offer it, and
+  a company on AWS is far more likely to run RDS, so this design sticks to plain Postgres.
 
 ### No foreign keys on `calls`
 
