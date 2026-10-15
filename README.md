@@ -73,7 +73,7 @@ A dashboard that shows a marketing manager how their inbound calls are doing: ca
 
 - **Plain Postgres, so it runs on AWS RDS.** Calls are split into daily partitions, and an hourly counters table keeps the charts fast at 100M calls. The cost: keeping the counters right is our code's job, not the database's. Without the RDS requirement, TimescaleDB would do both out of the box.
 - **Refresh every 10 seconds instead of on every call.** A new call can take up to 10 seconds to appear, but the database load no longer grows with call volume: a busy company with 20 dashboards open sends 2 queries per second instead of one per call per dashboard.
-- **Shared tables with `account_id` on every row.** The simplest multi-tenant model, and it can be sharded by account later.
+- **One shared database for all companies, with `account_id` on every row.** Cheap to run, and every query only reads one company's slice. The cost: a very large customer shares the database with everyone else, so at scale the biggest ones would move to their own shard.
 
 ### What I'd do with more time
 
