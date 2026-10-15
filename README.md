@@ -25,9 +25,10 @@ The first start migrates the database and generates **500,000 calls per company*
 (about 10 seconds, ~240 MB). After that, the simulator sends a new call roughly every 3 seconds and the
 dashboard updates live.
 
-- API docs (OpenAPI): http://localhost:8000/docs
+- API docs (OpenAPI): http://localhost:1012/docs
 - Simulator speed: `CALLS_PER_SECOND=2 docker compose up` (`0` pauses it)
-- Ports already in use: `WEB_PORT=1012 API_PORT=8001 DB_PORT=5433 docker compose up`
+- Ports: the dashboard is on 1011 and the API on 1012; the database and Redis are only reachable inside
+  Docker. If those ports are taken: `WEB_PORT=1021 API_PORT=1022 docker compose up`
 - Start over with fresh data: `docker compose down -v`
 
 ### Tests

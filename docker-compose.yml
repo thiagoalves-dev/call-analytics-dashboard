@@ -15,8 +15,6 @@ services:
       POSTGRES_DB: calls
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-    ports:
-      - "${DB_PORT:-5432}:5432"
     shm_size: 1g
     volumes:
       - db-data:/var/lib/postgresql/data
@@ -51,7 +49,7 @@ services:
       target: production
     environment: *api-environment
     ports:
-      - "${API_PORT:-8000}:8000"
+      - "${API_PORT:-1012}:8000"
     depends_on:
       setup:
         condition: service_completed_successfully
