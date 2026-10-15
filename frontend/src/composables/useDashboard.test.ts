@@ -19,6 +19,7 @@ const LAST_90_DAYS = buildConversion([buildConversionRow({ calls: 9000 })]);
 const LAST_24_HOURS = buildConversion([buildConversionRow({ calls: 100 })]);
 const FEED_CALL = buildCall({ id: 1, ended_at: "2026-10-13T15:00:00Z" });
 const LIVE_CALL = buildCall({ id: 2, ended_at: "2026-10-13T15:05:00Z" });
+const CAMPAIGN = { id: 1, name: "Google", source: "Google Ads", tracking_number: "+15550000001" };
 
 function mountDashboard(onUnauthenticated = vi.fn()) {
   let dashboard!: ReturnType<typeof useDashboard>;
@@ -144,13 +145,39 @@ describe("useDashboard", () => {
   });
 
   it("still loads the dashboard and shows the error when campaigns fail to load", async () => {
-    vi.mocked(fetchCampaigns).mockRejectedValue(new ApiError("Campaigns are unavailable", 500));
+    vi.mocked(fetchCampaigns).mockRejectedValue(new ApiError("Campaigns are unavailable"));
     const { dashboard } = mountDashboard();
 
-    await dashboard.start();
+    await dashboard.reload();
 
     expect(dashboard.error.value).toBe("Campaigns are unavailable");
     expect(dashboard.conversion.value).toEqual(LAST_24_HOURS);
+  });
+
+  it("retries loading campaigns on each refresh tick until they load", async () => {
+    vi.mocked(fetchCampaigns).mockRejectedValueOnce(new ApiError("Campaigns are unavailable"));
+    vi.mocked(fetchCampaigns).mockResolvedValueOnce([CAMPAIGN]);
+    const { dashboard } = mountDashboard();
+    await dashboard.reload();
+    expect(dashboard.campaigns.value).toEqual([]);
+
+    await vi.advanceTimersByTimeAsync(LIVE_REFRESH_MS);
+    expect(dashboard.campaigns.value).toEqual([CAMPAIGN]);
+    await vi.advanceTimersByTimeAsync(LIVE_REFRESH_MS * 2);
+
+    expect(fetchCampaigns).toHaveBeenCalledTimes(2);
+  });
+
+  it("retries loading campaigns on the next reload", async () => {
+    vi.mocked(fetchCampaigns).mockRejectedValueOnce(new ApiError("Campaigns are unavailable"));
+    vi.mocked(fetchCampaigns).mockResolvedValueOnce([CAMPAIGN]);
+    const { dashboard } = mountDashboard();
+    await dashboard.reload();
+
+    await dashboard.reload();
+
+    expect(dashboard.campaigns.value).toEqual([CAMPAIGN]);
+    expect(dashboard.error.value).toBeNull();
   });
 
   it("stops its timers when unmounted", async () => {

@@ -31,7 +31,7 @@ export interface Call {
   status: CallStatus;
 }
 
-export interface VolumePoint {
+interface VolumePoint {
   bucket: string;
   total: number;
   missed: number;

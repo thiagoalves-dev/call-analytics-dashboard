@@ -1,6 +1,6 @@
 import type { ConversionRow } from "../api/types";
 
-export interface KpiTotals {
+interface KpiTotals {
   calls: number;
   missed: number;
   converted: number;

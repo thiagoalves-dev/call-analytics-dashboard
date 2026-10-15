@@ -1,18 +1,17 @@
 <script setup lang="ts">
-import { BarElement, CategoryScale, Chart, LinearScale, Tooltip, type Plugin, type TooltipItem } from "chart.js";
+import type { Plugin, TooltipItem } from "chart.js";
 import { computed } from "vue";
 import { Bar } from "vue-chartjs";
 import { conversionChartSummary, type ConversionChartData } from "../../lib/chartData";
 import { CHART_FONT_FAMILY, chartColors, tooltipStyle } from "../../lib/chartTheme";
+import { wrapLabel } from "../../lib/labelWrap";
 import { STATUS_COLORS } from "../../lib/statusColors";
-
-Chart.register(BarElement, CategoryScale, LinearScale, Tooltip);
 
 const props = defineProps<{ data: ConversionChartData }>();
 
 const VALUE_LABEL_GAP = 8;
 const VALUE_LABEL_SPACE = 48;
-const LABEL_SEPARATOR = " - ";
+const MAX_LABEL_LINE_LENGTH = 18;
 const VALUE_LABEL_FONT = "600 12px";
 const BAR_CORNER_RADIUS = 6;
 const MAX_BAR_THICKNESS = 24;
@@ -50,6 +49,9 @@ const chartData = computed(() => ({
   ],
 }));
 
+const wrappedLabelAt = (tickIndex: string | number) =>
+  wrapLabel(props.data.labels[Number(tickIndex)], MAX_LABEL_LINE_LENGTH);
+
 function scales() {
   const colors = chartColors();
   return {
@@ -60,7 +62,7 @@ function scales() {
       ticks: {
         color: colors.text,
         padding: Y_TICK_PADDING,
-        callback: (tickValue: string | number) => props.data.labels[Number(tickValue)].split(LABEL_SEPARATOR),
+        callback: wrappedLabelAt,
       },
     },
   };

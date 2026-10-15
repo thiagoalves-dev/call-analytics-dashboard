@@ -1,4 +1,4 @@
-export type ApplyLatest = <T>(request: () => Promise<T>, apply: (response: T) => void) => Promise<void>;
+type ApplyLatest = <T>(request: () => Promise<T>, apply: (response: T) => void) => Promise<void>;
 
 export function createLatestResponseGuard(): ApplyLatest {
   let latestTicket = 0;

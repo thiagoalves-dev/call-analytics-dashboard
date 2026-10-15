@@ -96,12 +96,23 @@ describe("DashboardView", () => {
   });
 
   it("shows the dashboard with a visible error when campaigns fail to load", async () => {
-    vi.mocked(fetchCampaigns).mockRejectedValue(new ApiError("Campaigns are unavailable", 500));
+    vi.mocked(fetchCampaigns).mockRejectedValue(new ApiError("Campaigns are unavailable"));
 
     const { wrapper } = await openDashboard();
 
     expect(wrapper.get("[role=alert]").text()).toBe("Campaigns are unavailable");
     expect(fetchVolume).toHaveBeenCalled();
+  });
+
+  it("reloads the dashboard with the outcome picked in the filter bar", async () => {
+    const { wrapper } = await openDashboard();
+    vi.mocked(fetchVolume).mockClear();
+
+    await wrapper.findAll(".chips button").find((button) => button.text() === "Missed")!.trigger("click");
+    await flushPromises();
+
+    expect(vi.mocked(fetchVolume).mock.calls[0][0].getAll("status")).toEqual(["missed"]);
+    expect(wrapper.get(".chips .missed").attributes("aria-pressed")).toBe("true");
   });
 
   it("marks the selected volume granularity as pressed", async () => {

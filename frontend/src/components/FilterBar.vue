@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import type { Campaign, CallStatus } from "../api/types";
-import { ALL_STATUSES, type Filters } from "../lib/filters";
+import { ALL_STATUSES, type Filters, type RangePreset } from "../lib/filters";
 import { STATUS_LABELS } from "../lib/statusColors";
 import CampaignPicker from "./CampaignPicker.vue";
 
-defineProps<{ campaigns: Campaign[] }>();
-const filters = defineModel<Filters>("filters", { required: true });
+const props = defineProps<{ campaigns: Campaign[]; filters: Filters }>();
+const emit = defineEmits<{ "update:filters": [filters: Filters] }>();
 
 const PRESETS = [
   { value: "24h", shortLabel: "24h", label: "Last 24 hours" },
@@ -14,10 +14,15 @@ const PRESETS = [
   { value: "90d", shortLabel: "90d", label: "Last 90 days" },
 ] as const;
 
+const updateFilters = (changes: Partial<Filters>) => emit("update:filters", { ...props.filters, ...changes });
+const selectPreset = (preset: RangePreset) => updateFilters({ preset });
+const selectCampaigns = (campaignIds: number[]) => updateFilters({ campaignIds });
+const clearFilters = () => updateFilters({ campaignIds: [], statuses: [] });
+
 function toggleStatus(status: CallStatus) {
-  const statuses = filters.value.statuses;
+  const statuses = props.filters.statuses;
   const withoutStatus = statuses.filter((item) => item !== status);
-  filters.value.statuses = statuses.includes(status) ? withoutStatus : [...statuses, status];
+  updateFilters({ statuses: statuses.includes(status) ? withoutStatus : [...statuses, status] });
 }
 </script>
 
@@ -32,12 +37,12 @@ function toggleStatus(status: CallStatus) {
         :aria-label="preset.label"
         :aria-pressed="filters.preset === preset.value"
         :class="{ active: filters.preset === preset.value }"
-        @click="filters.preset = preset.value"
+        @click="selectPreset(preset.value)"
       >
         {{ preset.shortLabel }}
       </button>
     </div>
-    <CampaignPicker v-model="filters.campaignIds" :campaigns="campaigns" />
+    <CampaignPicker :model-value="filters.campaignIds" :campaigns="campaigns" @update:model-value="selectCampaigns" />
     <span class="divider" aria-hidden="true"></span>
     <div class="chips" role="group" aria-label="Outcome">
       <button
@@ -55,7 +60,7 @@ function toggleStatus(status: CallStatus) {
       v-if="filters.campaignIds.length || filters.statuses.length"
       type="button"
       class="clear"
-      @click="(filters.campaignIds = []), (filters.statuses = [])"
+      @click="clearFilters"
     >
       Clear filters
     </button>

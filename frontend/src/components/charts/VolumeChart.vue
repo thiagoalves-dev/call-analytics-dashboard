@@ -1,12 +1,9 @@
 <script setup lang="ts">
-import { BarElement, CategoryScale, Chart, LinearScale, Tooltip } from "chart.js";
 import { computed } from "vue";
 import { Bar } from "vue-chartjs";
 import { volumeChartSummary, type StatusSeries, type VolumeChartData } from "../../lib/chartData";
 import { chartColors, tooltipStyle } from "../../lib/chartTheme";
 import { formatCompact } from "../../lib/format";
-
-Chart.register(BarElement, CategoryScale, LinearScale, Tooltip);
 
 const props = defineProps<{ data: VolumeChartData }>();
 

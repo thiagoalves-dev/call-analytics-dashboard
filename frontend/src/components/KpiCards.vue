@@ -4,7 +4,7 @@ import type { ConversionRow } from "../api/types";
 import { formatCount, formatPercent } from "../lib/format";
 import { shareOfCalls, sumConversionRows } from "../lib/kpiTotals";
 
-const props = defineProps<{ rows: ConversionRow[]; outcomeFiltered: boolean }>();
+const props = defineProps<{ rows: ConversionRow[] | null; outcomeFiltered: boolean }>();
 
 const MISSED_RATE_WARNING = 0.2;
 
@@ -16,7 +16,8 @@ const ICONS = {
   missedRate: "M4.5 4.5l7 7M11.5 4.5l-7 7",
 };
 
-const totals = computed(() => sumConversionRows(props.rows));
+const loading = computed(() => props.rows === null);
+const totals = computed(() => sumConversionRows(props.rows ?? []));
 const conversionRate = computed(() => shareOfCalls(totals.value.converted, totals.value));
 const missedRate = computed(() => shareOfCalls(totals.value.missed, totals.value));
 const missedRateHigh = computed(() => (missedRate.value ?? 0) > MISSED_RATE_WARNING);
@@ -38,7 +39,7 @@ const cards = computed(() => [
 </script>
 
 <template>
-  <section class="kpis">
+  <section class="kpis" :aria-busy="loading">
     <div v-for="card in cards" :key="card.label" class="kpi">
       <div class="heading">
         <span class="icon" :class="card.tone">
@@ -46,7 +47,10 @@ const cards = computed(() => [
         </span>
         <span class="label">{{ card.label }}</span>
       </div>
-      <strong :class="{ warning: card.warning }">{{ card.value }}</strong>
+      <strong :class="{ warning: card.warning }">
+        <span v-if="loading" class="placeholder" aria-hidden="true"></span>
+        <template v-else>{{ card.value }}</template>
+      </strong>
     </div>
     <p v-if="outcomeFiltered" class="note">
       These totals cover every outcome; the outcome filter applies to the volume chart and the feed.
@@ -118,6 +122,14 @@ strong {
 }
 .warning {
   color: var(--missed-ink);
+}
+.placeholder {
+  display: inline-block;
+  width: 3.5em;
+  height: 1.1em;
+  vertical-align: top;
+  border-radius: 6px;
+  background: var(--subtle);
 }
 .note {
   grid-column: 1 / -1;

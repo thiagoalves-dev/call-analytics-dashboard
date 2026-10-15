@@ -10,10 +10,13 @@ type ChartResponses = [VolumeResponse, ConversionResponse];
 
 export function useCampaigns() {
   const campaigns = ref<Campaign[]>([]);
-  async function loadCampaigns() {
+  let campaignsLoaded = false;
+  async function loadCampaignsUntilLoaded() {
+    if (campaignsLoaded) return;
     campaigns.value = await fetchCampaigns();
+    campaignsLoaded = true;
   }
-  return { campaigns, loadCampaigns };
+  return { campaigns, loadCampaignsUntilLoaded };
 }
 
 export function useCharts(view: DashboardFilters) {

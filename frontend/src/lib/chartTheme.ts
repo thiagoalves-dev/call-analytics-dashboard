@@ -1,4 +1,4 @@
-import { Chart } from "chart.js";
+import { BarElement, CategoryScale, Chart, LinearScale, Tooltip } from "chart.js";
 
 export const CHART_FONT_FAMILY = "Inter, system-ui, -apple-system, sans-serif";
 const CHART_FONT_SIZE = 12;
@@ -7,10 +7,11 @@ const TOOLTIP_PADDING = 10;
 const TOOLTIP_CORNER_RADIUS = 8;
 const TOOLTIP_SWATCH_GAP = 4;
 
+Chart.register(BarElement, CategoryScale, LinearScale, Tooltip);
 Chart.defaults.font.family = CHART_FONT_FAMILY;
 Chart.defaults.font.size = CHART_FONT_SIZE;
 
-export interface ChartColors {
+interface ChartColors {
   text: string;
   muted: string;
   grid: string;

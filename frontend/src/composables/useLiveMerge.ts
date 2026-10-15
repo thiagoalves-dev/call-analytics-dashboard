@@ -8,15 +8,14 @@ export const LIVE_REFRESH_MS = 10_000;
 
 interface LiveMergeTargets {
   mergeLiveCalls: () => void;
-  loadCharts: () => Promise<void>;
-  onChartFailure: (failure: unknown) => void;
+  refreshData: () => Promise<unknown>;
 }
 
 export function useLiveMerge(view: DashboardFilters, liveCalls: LiveCallBuffer, targets: LiveMergeTargets) {
   async function applyLiveRefresh() {
     targets.mergeLiveCalls();
     view.refreshNow();
-    await targets.loadCharts().catch(targets.onChartFailure);
+    await targets.refreshData();
   }
   useInterval(applyLiveRefresh, LIVE_REFRESH_MS);
   return function receiveLiveCall(call: Call) {

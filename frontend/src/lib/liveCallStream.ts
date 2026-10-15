@@ -5,7 +5,7 @@ export type StreamState = "connecting" | "live" | "reconnecting";
 export const RECONNECT_BASE_DELAY_MS = 1_000;
 export const RECONNECT_MAX_DELAY_MS = 30_000;
 
-export interface LiveCallStreamHandlers {
+interface LiveCallStreamHandlers {
   onCall: (call: Call) => void;
   onReconnect: () => void;
   onStateChange: (state: StreamState) => void;

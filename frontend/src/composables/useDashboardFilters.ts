@@ -1,6 +1,6 @@
 import { computed, reactive, ref } from "vue";
 import type { ConversionGrouping, Granularity } from "../api/types";
-import { defaultFilters, effectiveGranularity, rangeFor, toQueryParams } from "../lib/filters";
+import { defaultFilters, effectiveGranularity, rangeFor, toQueryParams, type Filters } from "../lib/filters";
 
 export function useDashboardFilters() {
   const filters = reactive(defaultFilters());
@@ -11,7 +11,8 @@ export function useDashboardFilters() {
   const granularity = computed(() => effectiveGranularity(requestedGranularity.value, range.value));
   const query = computed(() => toQueryParams(filters, range.value));
   const refreshNow = () => (now.value = new Date());
-  return { filters, requestedGranularity, conversionGrouping, range, granularity, query, refreshNow };
+  const setFilters = (next: Filters) => Object.assign(filters, next);
+  return { filters, setFilters, requestedGranularity, conversionGrouping, range, granularity, query, refreshNow };
 }
 
 export type DashboardFilters = ReturnType<typeof useDashboardFilters>;

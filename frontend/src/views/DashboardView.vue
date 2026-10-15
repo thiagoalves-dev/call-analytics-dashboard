@@ -42,7 +42,7 @@ function leaveExpiredSession() {
   router.replace("/login");
 }
 
-onMounted(dashboard.start);
+onMounted(dashboard.reload);
 </script>
 
 <template>
@@ -70,9 +70,9 @@ onMounted(dashboard.start);
         <span class="muted">Inbound calls · times in {{ currentUser?.timezone }}</span>
       </div>
 
-      <FilterBar v-model:filters="filters" :campaigns="dashboard.campaigns.value" />
+      <FilterBar :filters="filters" :campaigns="dashboard.campaigns.value" @update:filters="dashboard.setFilters" />
       <p v-if="dashboard.error.value" class="error" role="alert">{{ dashboard.error.value }}</p>
-      <KpiCards :rows="conversion?.rows ?? []" :outcome-filtered="filters.statuses.length > 0" />
+      <KpiCards :rows="conversion?.rows ?? null" :outcome-filtered="filters.statuses.length > 0" />
 
       <section class="panel">
         <header>

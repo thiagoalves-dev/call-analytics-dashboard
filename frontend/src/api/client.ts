@@ -1,13 +1,6 @@
 export class UnauthenticatedError extends Error {}
 
-export class ApiError extends Error {
-  constructor(
-    message: string,
-    public readonly status: number,
-  ) {
-    super(message);
-  }
-}
+export class ApiError extends Error {}
 
 export async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const response = await fetch(path, {
@@ -19,7 +12,7 @@ export async function request<T>(path: string, init: RequestInit = {}): Promise<
     throw new UnauthenticatedError(await errorMessage(response));
   }
   if (!response.ok) {
-    throw new ApiError(await errorMessage(response), response.status);
+    throw new ApiError(await errorMessage(response));
   }
   return response.status === 204 ? (undefined as T) : response.json();
 }

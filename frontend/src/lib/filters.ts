@@ -8,7 +8,7 @@ export interface Filters {
   statuses: CallStatus[];
 }
 
-export interface DateRange {
+interface DateRange {
   start: Date;
   end: Date;
 }
@@ -18,7 +18,7 @@ const DAY_IN_MS = 24 * HOUR_IN_MS;
 export const MAX_HOURLY_RANGE_IN_DAYS = 31;
 const MAX_HOURLY_RANGE_IN_MS = MAX_HOURLY_RANGE_IN_DAYS * DAY_IN_MS;
 
-export const PRESET_DURATIONS_IN_MS: Record<RangePreset, number> = {
+const PRESET_DURATIONS_IN_MS: Record<RangePreset, number> = {
   "24h": DAY_IN_MS,
   "7d": 7 * DAY_IN_MS,
   "30d": 30 * DAY_IN_MS,
