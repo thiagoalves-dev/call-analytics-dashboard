@@ -1,5 +1,5 @@
 import logging
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
 from sqlalchemy import func, select, text
@@ -10,11 +10,12 @@ from app.models import Account, ApiKey, Campaign, User
 from app.security import hash_api_key, hash_password
 from app.seed.demo_accounts import DEMO_ACCOUNTS, DemoAccount
 from app.seed.traffic_plan import CampaignHour, campaign_hours, hourly_slots
-from app.support.time import local_date
+from app.support.time import local_date, local_midnight
 
 logger = logging.getLogger(__name__)
 
 GENERATE_CALLS_SQL = text((Path(__file__).parent / "generate_calls.sql").read_text())
+ROLL_UP_CALLS_SQL = text((Path(__file__).parent / "roll_up_calls.sql").read_text())
 ONE_DAY = timedelta(days=1)
 
 
@@ -31,7 +32,8 @@ class Seeder:
                 return
             for demo_account in DEMO_ACCOUNTS:
                 await self.seed_account(session, demo_account)
-        await self.refresh_hourly_stats()
+        await self.analyze()
+        logger.info("Seed complete")
 
     async def seed_account(self, session: AsyncSession, demo_account: DemoAccount) -> None:
         account = await self.create_account(session, demo_account)
@@ -41,6 +43,7 @@ class Seeder:
         for day in self.days(demo_account.timezone):
             hours = campaign_hours(hourly_slots(day, demo_account.timezone, self.now), calls_per_weight, campaigns)
             await self.insert_calls(session, account.id, hours)
+            await self.roll_up_day(session, account.id, day, demo_account.timezone)
             logger.info("%s: seeded %s", demo_account.name, day)
 
     async def create_account(self, session: AsyncSession, demo_account: DemoAccount) -> Account:
@@ -91,10 +94,12 @@ class Seeder:
         )
         await session.commit()
 
-    async def refresh_hourly_stats(self) -> None:
-        logger.info("Materializing hourly stats")
+    async def roll_up_day(self, session: AsyncSession, account_id: int, day: date, timezone: str) -> None:
+        start, end = local_midnight(day, timezone), local_midnight(day + ONE_DAY, timezone)
+        await session.execute(ROLL_UP_CALLS_SQL, {"account_id": account_id, "start": start, "end": end})
+        await session.commit()
+
+    async def analyze(self) -> None:
         async with self.engine.connect() as connection:
             autocommit = await connection.execution_options(isolation_level="AUTOCOMMIT")
-            await autocommit.execute(text("ANALYZE calls"))
-            await autocommit.execute(text("CALL refresh_continuous_aggregate('call_stats_hourly', NULL, NULL)"))
-        logger.info("Seed complete")
+            await autocommit.execute(text("ANALYZE calls, call_stats_hourly"))

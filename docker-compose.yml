@@ -10,7 +10,7 @@ x-api-environment: &api-environment
 
 services:
   db:
-    image: timescale/timescaledb:2.22.1-pg17
+    image: postgres:17.6
     environment:
       POSTGRES_DB: calls
       POSTGRES_USER: postgres

@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Account, ApiKey, Call, CallStatus, Campaign, User
+from app.repositories import call_stats_repository
 from app.security import hash_api_key, hash_password
 
 DEFAULT_PASSWORD = "correct-password"
@@ -61,6 +62,8 @@ async def create_call(
         status=status,
     )
     session.add(call)
+    await session.flush()
+    await call_stats_repository.record_call(session, call)
     await session.commit()
     return call
 

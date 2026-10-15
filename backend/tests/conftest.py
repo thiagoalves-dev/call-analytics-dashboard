@@ -12,7 +12,7 @@ from app.db import engine
 from app.main import app
 from app.services.broadcaster import Broadcaster
 
-TABLES = "accounts, users, api_keys, campaigns, calls"
+TABLES = "accounts, users, api_keys, campaigns, calls, call_stats_hourly"
 
 
 @pytest.fixture(scope="session", autouse=True)

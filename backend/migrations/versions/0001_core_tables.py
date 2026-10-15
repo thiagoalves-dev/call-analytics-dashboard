@@ -15,8 +15,6 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.execute("CREATE EXTENSION IF NOT EXISTS timescaledb")
-
     op.create_table(
         "accounts",
         sa.Column("id", sa.Integer, primary_key=True),
@@ -70,6 +68,7 @@ def upgrade() -> None:
             nullable=False,
         ),
         sa.PrimaryKeyConstraint("id", "started_at"),
+        postgresql_partition_by="RANGE (started_at)",
     )
 
 

@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.exceptions import UnprocessableError
 from app.models import Account, Call, Campaign
-from app.repositories import call_repository, campaign_repository
+from app.repositories import call_repository, call_stats_repository, campaign_repository
 from app.schemas.call import CallResponse, StoreCallRequest
 
 MAX_CLOCK_SKEW = timedelta(minutes=5)
@@ -28,6 +28,8 @@ class StoreCall:
         self.ensure_start_time_is_acceptable()
         campaign = await self.campaign_for_tracking_number()
         inserted = await call_repository.insert_unless_duplicate(self.session, self.call_values(campaign))
+        if inserted:
+            await call_stats_repository.record_call(self.session, inserted)
         call = inserted or await self.existing_call()
         await self.session.commit()
         return StoredCall(call=CallResponse.from_models(call, campaign), created=inserted is not None)

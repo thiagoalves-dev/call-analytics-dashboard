@@ -30,7 +30,7 @@ and the frontend.
 
 ## Tests
 
-1. `pytest`, integration tests against a real TimescaleDB — never mocks for SQL.
+1. `pytest`, integration tests against a real PostgreSQL — never mocks for SQL.
 2. Each endpoint's test file is ordered: authentication → validation → happy path.
 3. Requests go through helpers in `tests/helpers.py` (`send_volume_request(...)`), not raw client calls.
 4. Pin every attribute an assertion depends on; never rely on random fixture data.

@@ -8,14 +8,15 @@
 |---|---|---|
 | `frontend` | Vue 3 + Vite, built to static files and served by nginx | nginx also proxies `/api`, so the browser talks to one origin: the session cookie works without CORS, and SSE goes through with buffering off. |
 | `api` | FastAPI, 2 uvicorn worker processes | API-first, async, OpenAPI docs at `/docs`. Two workers on purpose: it proves live events reach a browser no matter which process handled the ingest. |
-| `db` | PostgreSQL 17 + TimescaleDB (Community edition, free) | Calls are append-only time-series. Timescale gives automatic time partitioning and incremental rollups on top of plain Postgres. |
+| `db` | Plain PostgreSQL 17, no extensions | The same engine you get on AWS RDS / Aurora. Daily partitions and an hourly rollup table keep the dashboard fast without anything RDS doesn't offer. |
 | `redis` | Redis pub/sub | Fan-out of new calls to every API process. |
 | `simulator` | A small Python service | Stands in for the telephony provider. Sends finished calls to `POST /api/calls`, the same way a webhook would. |
-| `setup` | One-shot container | Runs the Alembic migrations, then seeds demo data if the database is empty. |
+| `setup` | One-shot container | Runs the Alembic migrations, creates the daily partitions, then seeds demo data if the database is empty. |
 
 ## Data flow
 
-**Live path.** simulator → `POST /api/calls` (API key) → insert into `calls` → publish to Redis channel
+**Live path.** simulator → `POST /api/calls` (API key) → insert into `calls` and add 1 to its hour in
+`call_stats_hourly`, in the same transaction → publish to Redis channel
 `calls:<account_id>` → every API process receives it → pushed to that account's open browsers over
 Server-Sent Events → the browser collects new calls and, every 10 seconds, adds them to the feed and refetches
 the charts. The page says so at the top.
@@ -25,7 +26,8 @@ that ended most recently through the `(account_id, ended_at DESC)` index. It ord
 `started_at`, because a call is reported when it ends: a 10-minute call that just finished belongs at the top.
 
 **Backfill path.** The historical seed skips the API and generates rows inside Postgres
-(`INSERT … SELECT generate_series`), one day at a time. Bulk backfill and live ingestion are separate paths
+(`INSERT … SELECT generate_series`), one day at a time, then rolls that day up into `call_stats_hourly`
+with one `INSERT … SELECT … GROUP BY`. Bulk backfill and live ingestion are separate paths
 on purpose: loading millions of rows through HTTP would take hours.
 
 ## Data model
@@ -35,9 +37,10 @@ on purpose: loading millions of rows through HTTP would take hours.
 - `api_keys` — machine credentials for ingestion. Only the SHA-256 of the key is stored.
 - `campaigns` — each owns a tracking number. A call to that number belongs to that campaign, the way call
   tracking attributes calls.
-- `calls` — one row per finished call. A hypertable partitioned by `started_at` in 1-day chunks. `ended_at`
-  (start + duration) is stored so the feed can sort by it with an index.
-- `call_stats_hourly` — the continuous aggregate: per account, campaign and hour, one counter per outcome.
+- `calls` — one row per finished call, partitioned by `started_at` into one table per day (`calls_20261014`).
+  `ended_at` (start + duration) is stored so the feed can sort by it with an index.
+- `call_stats_hourly` — the rollup: one row per account, hour and campaign, with a counter per outcome and
+  the total duration.
 
 ## Decisions and why
 
@@ -49,37 +52,47 @@ products use. A query for one account only reads that account's slice of the ind
 behaves like a small one for a typical customer. It also makes sharding by `account_id` possible later
 without a rewrite.
 
-### TimescaleDB continuous aggregate
+### Daily partitions + an hourly rollup table (plain Postgres, RDS-compatible)
 
-- **Hypertable, 1-day chunks.** "Last 7 days" only touches 7–8 chunks. Old data can later be compressed or
-  dropped a chunk at a time.
-- **`materialized_only = false` (real-time aggregation).** Rows newer than the last refresh are aggregated on
-  the fly and merged with the materialized buckets, so the current hour is always live.
-- **Refresh policy: every 5 minutes, from 3 days ago to 1 hour ago.** The 3-day start picks up late calls;
-  the 1-hour end leaves the in-progress hour to real-time aggregation instead of materializing a bucket that
-  is still changing.
-- **Daily view = re-bucketed hourly rows in the account's timezone.** `time_bucket('1 day', bucket, tz)` on
-  the hourly aggregate. Works because the supported timezones have whole-hour offsets; a +05:30 zone would
-  need a 30-minute aggregate.
-- **Trade-off:** Timescale's continuous aggregates are free to self-host, but AWS RDS / Aurora and Cloud SQL
-  don't offer them. On those, the fallback is a rollup table updated on insert, or moving analytics to
-  ClickHouse.
+The dashboard never scans raw calls for its charts. Two plain-Postgres features do the work, both available
+on AWS RDS / Aurora:
+
+- **Native partitioning, one partition per day.** "Last 7 days" only touches 7–8 partitions, and old data
+  is dropped or archived a whole day at a time (`DROP TABLE calls_20260701`) instead of with a huge `DELETE`.
+  `create_call_partitions(first_day, last_day)` creates them; `setup` runs it on every start, from the oldest
+  seeded day to 30 days ahead. A `calls_default` partition catches anything outside that range so an insert
+  never fails. On RDS, `pg_partman` + `pg_cron` would create tomorrow's partition every night.
+- **`call_stats_hourly`, a rollup table kept up to date on insert.** Every new call runs an upsert in the
+  same transaction: insert the (account, hour, campaign) row or add 1 to its counters. The charts read at
+  most 24 rows per campaign per day, and the numbers are exact the moment the call is committed. A late
+  call simply adds 1 to an older hour.
+- **Daily view = hourly rows re-bucketed in the account's timezone** with `date_trunc('day', bucket, tz)`.
+  Works because the supported timezones have whole-hour offsets; a +05:30 zone would need 30-minute rows.
+- **Trade-offs.** We own the rollup code: a bug or a manual `DELETE` on `calls` can make it drift, so a
+  real deployment would add a nightly job that recomputes recent days from `calls`. At very high ingest,
+  many calls updating the same (account, hour, campaign) row compete for its lock; the fix is to queue
+  calls and apply the counts in batches every few seconds.
+- **Why not TimescaleDB?** I first built this on TimescaleDB (hypertables + continuous aggregates). It
+  worked well, but AWS RDS / Aurora and Google Cloud SQL don't offer it, and a company already on AWS is far
+  more likely to run RDS than to add a new database vendor. Plain Postgres gives the same dashboard speed
+  (see the benchmarks in the README).
 
 ### No foreign keys on `calls`
 
-On a 100M-row hypertable, foreign keys slow down every insert. The API is the only writer and validates
+On a 100M-row table, foreign keys slow down every insert. The API is the only writer and validates
 the account (API key) and the campaign (tracking number) on the way in.
 
 ### Idempotent ingestion
 
 Telephony webhooks retry. `external_id` (the provider's call id) has a partial unique index
 `(account_id, external_id, started_at)`, and the insert uses `ON CONFLICT DO NOTHING`. A retry returns
-`200` with the stored call and is not re-published. Timescale requires the time column in every unique
-index; a genuine retry carries the same `started_at`, so that's fine. A retry with a *different*
+`200` with the stored call, is not counted again in the rollup, and is not re-published. Postgres requires
+the partition column in every unique index on a partitioned table; a genuine retry carries the same
+`started_at`, so that's fine. A retry with a *different*
 `started_at` would be stored twice — a known limitation.
 
-Calls older than 3 days are rejected with `422`: they'd fall outside the aggregate's refresh window and
-never show up in the charts. Old data goes through the backfill path.
+Calls older than 3 days are rejected with `422`. A webhook that late is more likely a replay than a real
+delivery; history goes through the backfill path.
 
 ### Real-time: SSE + Redis pub/sub
 

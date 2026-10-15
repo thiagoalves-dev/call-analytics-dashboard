@@ -19,6 +19,9 @@ RAW_COUNTS = """
     count(*) FILTER (WHERE status = 'converted') AS converted
 """
 AGGREGATE_COUNTS = "sum(total), sum(missed), sum(connected), sum(converted)"
+CALLS_SIZE_SQL = (
+    "SELECT pg_size_pretty(sum(pg_total_relation_size(inhrelid))) FROM pg_inherits WHERE inhparent = 'calls'::regclass"
+)
 
 
 @dataclass(frozen=True)
@@ -33,7 +36,7 @@ SCENARIOS = (
     Scenario(
         "Hourly volume, last 7 days",
         7,
-        f"SELECT time_bucket('1 hour', started_at) AS bucket, {RAW_COUNTS} FROM calls "
+        f"SELECT date_trunc('hour', started_at, 'UTC') AS bucket, {RAW_COUNTS} FROM calls "
         "WHERE account_id = :account AND started_at >= :start AND started_at < :end GROUP BY bucket",
         f"SELECT bucket, {AGGREGATE_COUNTS} FROM call_stats_hourly "
         "WHERE account_id = :account AND bucket >= :start AND bucket < :end GROUP BY bucket",
@@ -41,9 +44,9 @@ SCENARIOS = (
     Scenario(
         "Daily volume, last 90 days",
         90,
-        f"SELECT time_bucket('1 day', started_at, :timezone) AS bucket, {RAW_COUNTS} FROM calls "
+        f"SELECT date_trunc('day', started_at, :timezone) AS bucket, {RAW_COUNTS} FROM calls "
         "WHERE account_id = :account AND started_at >= :start AND started_at < :end GROUP BY bucket",
-        f"SELECT time_bucket('1 day', bucket, :timezone) AS day, {AGGREGATE_COUNTS} FROM call_stats_hourly "
+        f"SELECT date_trunc('day', bucket, :timezone) AS day, {AGGREGATE_COUNTS} FROM call_stats_hourly "
         "WHERE account_id = :account AND bucket >= :start AND bucket < :end GROUP BY day",
     ),
     Scenario(
@@ -75,14 +78,14 @@ def parameters_for(scenario: Scenario) -> dict:
 async def table_facts() -> tuple[int, str]:
     async with engine.connect() as connection:
         row_count = await connection.scalar(text("SELECT count(*) FROM calls"))
-        size = await connection.scalar(text("SELECT pg_size_pretty(hypertable_size('calls'))"))
+        size = await connection.scalar(text(CALLS_SIZE_SQL))
     return row_count, size
 
 
 async def main() -> None:
     row_count, size = await table_facts()
     print(f"calls: {row_count:,} rows, {size} on disk. Median of {RUNS} runs, account {ACCOUNT_ID}.\n")
-    print("| Query | Raw calls table | Continuous aggregate | Speedup |")
+    print("| Query | Raw calls table | Hourly rollup | Speedup |")
     print("|---|---:|---:|---:|")
     for scenario in SCENARIOS:
         raw = await median_milliseconds(scenario.raw_sql, parameters_for(scenario))

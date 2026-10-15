@@ -12,9 +12,9 @@ flowchart LR
   API["<b>api</b> · FastAPI ×2 processes<br/>routers → actions → repositories<br/>1 Redis subscription per process"]
   SIM["<b>simulator</b><br/>stands in for the<br/>telephony provider"]
   REDIS[("<b>Redis</b><br/>pub/sub<br/>channel per account")]
-  subgraph DB["db · PostgreSQL 17 + TimescaleDB"]
-    CALLS[("<b>calls</b><br/>hypertable<br/>1-day chunks")]
-    AGG[("<b>call_stats_hourly</b><br/>continuous aggregate")]
+  subgraph DB["db · PostgreSQL 17 (plain, RDS-compatible)"]
+    CALLS[("<b>calls</b><br/>partitioned<br/>one table per day")]
+    AGG[("<b>call_stats_hourly</b><br/>hourly rollup table")]
     META[("accounts · users<br/>api_keys · campaigns")]
   end
   SETUP["<b>setup</b> · one-shot<br/>migrations + bulk seed"]
@@ -23,12 +23,12 @@ flowchart LR
   NGINX <--> API
   SIM -- "POST /api/calls<br/>X-API-Key" --> API
   API -- "1 · insert call" --> CALLS
+  API -- "1 · +1 to its hour<br/>(same transaction)" --> AGG
   API -- "2 · publish" --> REDIS
   REDIS -- "3 · fan out to every<br/>API process → SSE" --> API
-  CALLS -- "refresh every 5 min<br/>+ real-time newest rows" --> AGG
   AGG -. "charts" .-> API
   META -. "auth, campaigns" .-> API
-  SETUP -. "generate_series backfill" .-> CALLS
+  SETUP -. "partitions + generate_series<br/>backfill + roll-up" .-> CALLS
 </pre></div>
 <script>mermaid.initialize({startOnLoad:true,theme:"neutral",themeVariables:{fontSize:"17px"},flowchart:{curve:"basis",nodeSpacing:40,rankSpacing:70}});</script>
 </body></html>

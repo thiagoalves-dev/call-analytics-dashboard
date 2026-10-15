@@ -4,7 +4,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from sqlalchemy import func, select
 
-from app.models import Call
+from app.models import Call, call_stats_hourly
 from tests.factories import create_account, create_api_key, create_campaign
 from tests.helpers import send_store_call_request
 
@@ -35,6 +35,10 @@ async def api_key(session, acme):
 
 async def count_calls(session) -> int:
     return await session.scalar(select(func.count()).select_from(Call))
+
+
+async def hourly_totals(session) -> list[tuple[int, int]]:
+    return (await session.execute(select(call_stats_hourly.c.total, call_stats_hourly.c.converted))).all()
 
 
 async def test_rejects_a_request_without_an_api_key(client, api_key):
@@ -73,7 +77,7 @@ async def test_rejects_a_call_from_the_future(client, api_key):
     assert (await send_store_call_request(client, call_payload(started_at=started_at), api_key)).status_code == 422
 
 
-async def test_rejects_a_call_older_than_the_aggregation_window(client, api_key):
+async def test_rejects_a_call_older_than_three_days(client, api_key):
     started_at = (datetime.now(UTC) - timedelta(days=4)).isoformat()
 
     assert (await send_store_call_request(client, call_payload(started_at=started_at), api_key)).status_code == 422
@@ -117,3 +121,17 @@ async def test_a_retried_delivery_is_stored_once_and_returns_200(client, session
     assert (first.status_code, retry.status_code) == (201, 200)
     assert retry.json()["id"] == first.json()["id"]
     assert await count_calls(session) == 1
+
+
+async def test_counts_a_new_call_in_the_hourly_rollup(client, session, api_key):
+    await send_store_call_request(client, call_payload(), api_key)
+
+    assert await hourly_totals(session) == [(1, 1)]
+
+
+async def test_a_retried_delivery_is_counted_once_in_the_hourly_rollup(client, session, api_key):
+    payload = call_payload()
+    await send_store_call_request(client, payload, api_key)
+    await send_store_call_request(client, payload, api_key)
+
+    assert await hourly_totals(session) == [(1, 1)]
