@@ -58,6 +58,8 @@ describe("callMatchesFilters", () => {
   });
 
   it("rejects a live call with an unselected outcome", () => {
-    expect(callMatchesFilters(call({ status: "missed" }), { ...defaultFilters(), statuses: ["converted"] })).toBe(false);
+    const filters = { ...defaultFilters(), statuses: ["converted" as const] };
+
+    expect(callMatchesFilters(call({ status: "missed" }), filters)).toBe(false);
   });
 });

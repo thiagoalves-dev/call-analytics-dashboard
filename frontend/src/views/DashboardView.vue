@@ -7,20 +7,26 @@ import LiveFeed from "../components/LiveFeed.vue";
 import LogoMark from "../components/LogoMark.vue";
 import ConversionChart from "../components/charts/ConversionChart.vue";
 import VolumeChart from "../components/charts/VolumeChart.vue";
-import { LIVE_REFRESH_MS, useDashboard } from "../composables/useDashboard";
+import { useDashboard } from "../composables/useDashboard";
 import { useLiveCalls } from "../composables/useLiveCalls";
+import { LIVE_REFRESH_MS } from "../composables/useLiveMerge";
 import { useSession } from "../composables/useSession";
 import { conversionChartData, volumeChartData } from "../lib/chartData";
-import { hourlyViewAllowed } from "../lib/filters";
+import { MAX_HOURLY_RANGE_IN_DAYS, hourlyViewAllowed } from "../lib/filters";
 import { initialsOf } from "../lib/format";
 
+const MS_PER_SECOND = 1000;
+const HOURLY_UNAVAILABLE_REASON = `Hourly view is available for ranges up to ${MAX_HOURLY_RANGE_IN_DAYS} days`;
+
 const router = useRouter();
-const { currentUser, signOut } = useSession();
-const dashboard = useDashboard();
+const { currentUser, signOut, endSession } = useSession();
+const dashboard = useDashboard(leaveExpiredSession);
 const { filters, requestedGranularity, granularity, conversionGrouping, range, volume, conversion, feed } = dashboard;
-const { streamState } = useLiveCalls(dashboard.receiveLiveCall, dashboard.reload);
-const refreshSeconds = LIVE_REFRESH_MS / 1000;
+const liveCalls = useLiveCalls(dashboard.receiveLiveCall, dashboard.reload);
+const { streamState } = liveCalls;
+const refreshSeconds = LIVE_REFRESH_MS / MS_PER_SECOND;
 const initials = computed(() => initialsOf(currentUser.value?.name ?? ""));
+const hourlyAllowed = computed(() => hourlyViewAllowed(range.value));
 
 const volumeData = computed(() => volume.value && volumeChartData(volume.value));
 const conversionData = computed(() => conversion.value && conversionChartData(conversion.value.rows));
@@ -30,10 +36,13 @@ async function logOut() {
   await router.push("/login");
 }
 
-onMounted(async () => {
-  await dashboard.loadCampaigns();
-  await dashboard.reload();
-});
+function leaveExpiredSession() {
+  endSession();
+  liveCalls.stop();
+  router.replace("/login");
+}
+
+onMounted(dashboard.start);
 </script>
 
 <template>
@@ -45,7 +54,9 @@ onMounted(async () => {
         <span class="separator" aria-hidden="true">/</span>
         <span class="company">{{ currentUser?.account_name }}</span>
       </div>
-      <p class="refresh-note"><span class="pulse-dot"></span>Everything on this page updates every {{ refreshSeconds }} seconds.</p>
+      <p class="refresh-note">
+        <span class="pulse-dot"></span>Everything on this page updates every {{ refreshSeconds }} seconds.
+      </p>
       <div class="account">
         <span class="avatar" :title="currentUser?.name" aria-hidden="true">{{ initials }}</span>
         <span class="user-name">{{ currentUser?.name }}</span>
@@ -60,22 +71,31 @@ onMounted(async () => {
       </div>
 
       <FilterBar v-model:filters="filters" :campaigns="dashboard.campaigns.value" />
-      <p v-if="dashboard.error.value" class="error">{{ dashboard.error.value }}</p>
+      <p v-if="dashboard.error.value" class="error" role="alert">{{ dashboard.error.value }}</p>
       <KpiCards :rows="conversion?.rows ?? []" :outcome-filtered="filters.statuses.length > 0" />
 
       <section class="panel">
         <header>
           <h2>Call volume</h2>
-          <div class="segmented">
+          <div class="segmented" role="group" aria-label="Volume granularity">
             <button
               type="button"
               :class="{ active: granularity === 'hour' }"
-              :disabled="!hourlyViewAllowed(range)"
+              :aria-pressed="granularity === 'hour'"
+              :disabled="!hourlyAllowed"
+              :title="hourlyAllowed ? undefined : HOURLY_UNAVAILABLE_REASON"
               @click="requestedGranularity = 'hour'"
             >
               Hourly
             </button>
-            <button type="button" :class="{ active: granularity === 'day' }" @click="requestedGranularity = 'day'">Daily</button>
+            <button
+              type="button"
+              :class="{ active: granularity === 'day' }"
+              :aria-pressed="granularity === 'day'"
+              @click="requestedGranularity = 'day'"
+            >
+              Daily
+            </button>
           </div>
         </header>
         <div class="chart tall">
@@ -87,11 +107,21 @@ onMounted(async () => {
         <section class="panel">
           <header>
             <h2>Conversion rate</h2>
-            <div class="segmented">
-              <button type="button" :class="{ active: conversionGrouping === 'campaign' }" @click="conversionGrouping = 'campaign'">
+            <div class="segmented" role="group" aria-label="Conversion grouping">
+              <button
+                type="button"
+                :class="{ active: conversionGrouping === 'campaign' }"
+                :aria-pressed="conversionGrouping === 'campaign'"
+                @click="conversionGrouping = 'campaign'"
+              >
                 By campaign
               </button>
-              <button type="button" :class="{ active: conversionGrouping === 'source' }" @click="conversionGrouping = 'source'">
+              <button
+                type="button"
+                :class="{ active: conversionGrouping === 'source' }"
+                :aria-pressed="conversionGrouping === 'source'"
+                @click="conversionGrouping = 'source'"
+              >
                 By source
               </button>
             </div>

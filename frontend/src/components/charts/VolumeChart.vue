@@ -2,7 +2,7 @@
 import { BarElement, CategoryScale, Chart, LinearScale, Tooltip } from "chart.js";
 import { computed } from "vue";
 import { Bar } from "vue-chartjs";
-import type { StatusSeries, VolumeChartData } from "../../lib/chartData";
+import { volumeChartSummary, type StatusSeries, type VolumeChartData } from "../../lib/chartData";
 import { chartColors, tooltipStyle } from "../../lib/chartTheme";
 import { formatCompact } from "../../lib/format";
 
@@ -11,6 +11,11 @@ Chart.register(BarElement, CategoryScale, LinearScale, Tooltip);
 const props = defineProps<{ data: VolumeChartData }>();
 
 const TOP_CORNER_RADIUS = { topLeft: 3, topRight: 3, bottomLeft: 0, bottomRight: 0 };
+const CATEGORY_WIDTH_SHARE = 0.82;
+const BAR_WIDTH_SHARE = 0.9;
+const X_TICK_SKIP_PADDING = 16;
+const MAX_Y_TICKS = 6;
+const Y_TICK_PADDING = 8;
 
 function dataset(series: StatusSeries, index: number) {
   const isTopOfStack = index === props.data.series.length - 1;
@@ -21,8 +26,8 @@ function dataset(series: StatusSeries, index: number) {
     hoverBackgroundColor: series.color,
     borderRadius: isTopOfStack ? TOP_CORNER_RADIUS : 0,
     borderSkipped: false,
-    categoryPercentage: 0.82,
-    barPercentage: 0.9,
+    categoryPercentage: CATEGORY_WIDTH_SHARE,
+    barPercentage: BAR_WIDTH_SHARE,
   };
 }
 
@@ -38,17 +43,24 @@ function scales() {
       stacked: true,
       grid: { display: false },
       border: { display: false },
-      ticks: { color: colors.muted, maxRotation: 0, autoSkipPadding: 16 },
+      ticks: { color: colors.muted, maxRotation: 0, autoSkipPadding: X_TICK_SKIP_PADDING },
     },
     y: {
       stacked: true,
       beginAtZero: true,
       border: { display: false },
       grid: { color: colors.grid },
-      ticks: { color: colors.muted, maxTicksLimit: 6, padding: 8, callback: (value: string | number) => formatCompact(Number(value)) },
+      ticks: {
+        color: colors.muted,
+        maxTicksLimit: MAX_Y_TICKS,
+        padding: Y_TICK_PADDING,
+        callback: (value: string | number) => formatCompact(Number(value)),
+      },
     },
   };
 }
+
+const summary = computed(() => volumeChartSummary(props.data));
 
 const options = computed(() => ({
   responsive: true,
@@ -68,7 +80,7 @@ const options = computed(() => ({
       </li>
     </ul>
     <div class="canvas">
-      <Bar :data="chartData" :options="options" />
+      <Bar :data="chartData" :options="options" :aria-label="summary" />
     </div>
   </div>
 </template>

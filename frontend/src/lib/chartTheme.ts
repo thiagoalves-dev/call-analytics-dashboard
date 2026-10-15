@@ -1,9 +1,14 @@
 import { Chart } from "chart.js";
 
 export const CHART_FONT_FAMILY = "Inter, system-ui, -apple-system, sans-serif";
+const CHART_FONT_SIZE = 12;
+const TOOLTIP_TITLE_WEIGHT = 600;
+const TOOLTIP_PADDING = 10;
+const TOOLTIP_CORNER_RADIUS = 8;
+const TOOLTIP_SWATCH_GAP = 4;
 
 Chart.defaults.font.family = CHART_FONT_FAMILY;
-Chart.defaults.font.size = 12;
+Chart.defaults.font.size = CHART_FONT_SIZE;
 
 export interface ChartColors {
   text: string;
@@ -24,10 +29,10 @@ export function tooltipStyle() {
     backgroundColor: "rgba(15, 21, 35, 0.94)",
     titleColor: "#ffffff",
     bodyColor: "#d6dae3",
-    titleFont: { weight: 600 as const },
-    padding: 10,
-    cornerRadius: 8,
-    boxPadding: 4,
+    titleFont: { weight: TOOLTIP_TITLE_WEIGHT },
+    padding: TOOLTIP_PADDING,
+    cornerRadius: TOOLTIP_CORNER_RADIUS,
+    boxPadding: TOOLTIP_SWATCH_GAP,
     usePointStyle: true,
   };
 }

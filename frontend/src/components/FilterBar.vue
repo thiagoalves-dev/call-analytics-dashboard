@@ -16,7 +16,8 @@ const PRESETS = [
 
 function toggleStatus(status: CallStatus) {
   const statuses = filters.value.statuses;
-  filters.value.statuses = statuses.includes(status) ? statuses.filter((item) => item !== status) : [...statuses, status];
+  const withoutStatus = statuses.filter((item) => item !== status);
+  filters.value.statuses = statuses.includes(status) ? withoutStatus : [...statuses, status];
 }
 </script>
 

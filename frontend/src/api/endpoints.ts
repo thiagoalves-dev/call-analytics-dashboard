@@ -1,5 +1,13 @@
 import { request } from "./client";
-import type { Call, Campaign, ConversionGrouping, ConversionResponse, Granularity, User, VolumeResponse } from "./types";
+import type {
+  Call,
+  Campaign,
+  ConversionGrouping,
+  ConversionResponse,
+  Granularity,
+  User,
+  VolumeResponse,
+} from "./types";
 
 export const login = (email: string, password: string) =>
   request<User>("/api/auth/login", { method: "POST", body: JSON.stringify({ email, password }) });

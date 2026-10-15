@@ -5,12 +5,20 @@ import type { Campaign } from "../api/types";
 const props = defineProps<{ campaigns: Campaign[] }>();
 const selectedIds = defineModel<number[]>({ required: true });
 const open = ref(false);
+const trigger = ref<HTMLButtonElement | null>(null);
 
 const summary = computed(() => {
+  const [onlySelectedId] = selectedIds.value;
   if (selectedIds.value.length === 0) return "All campaigns";
-  if (selectedIds.value.length === 1) return props.campaigns.find((campaign) => campaign.id === selectedIds.value[0])?.name;
+  if (selectedIds.value.length === 1) return props.campaigns.find((campaign) => campaign.id === onlySelectedId)?.name;
   return `${selectedIds.value.length} campaigns`;
 });
+
+function closeAndRefocus() {
+  if (!open.value) return;
+  open.value = false;
+  trigger.value?.focus();
+}
 
 function closeWhenFocusLeaves(event: FocusEvent) {
   const picker = event.currentTarget as Element;
@@ -19,12 +27,12 @@ function closeWhenFocusLeaves(event: FocusEvent) {
 </script>
 
 <template>
-  <div class="picker" @focusout="closeWhenFocusLeaves">
+  <div class="picker" @focusout="closeWhenFocusLeaves" @keydown.esc="closeAndRefocus">
     <button
+      ref="trigger"
       type="button"
       class="trigger"
       :class="{ filtered: selectedIds.length > 0 }"
-      aria-label="Campaigns"
       :aria-expanded="open"
       @click="open = !open"
     >

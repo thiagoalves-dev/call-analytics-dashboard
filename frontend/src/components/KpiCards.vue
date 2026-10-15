@@ -2,44 +2,38 @@
 import { computed } from "vue";
 import type { ConversionRow } from "../api/types";
 import { formatCount, formatPercent } from "../lib/format";
+import { shareOfCalls, sumConversionRows } from "../lib/kpiTotals";
 
 const props = defineProps<{ rows: ConversionRow[]; outcomeFiltered: boolean }>();
 
 const MISSED_RATE_WARNING = 0.2;
 
 const ICONS = {
-  calls: "M5.5 3h2l1 3-1.5 1a8 8 0 0 0 3.5 3.5l1-1.5 3 1v2a1.5 1.5 0 0 1-1.5 1.5A10.5 10.5 0 0 1 2.5 4.5 1.5 1.5 0 0 1 4 3Z",
+  calls:
+    "M5.5 3h2l1 3-1.5 1a8 8 0 0 0 3.5 3.5l1-1.5 3 1v2a1.5 1.5 0 0 1-1.5 1.5A10.5 10.5 0 0 1 2.5 4.5 1.5 1.5 0 0 1 4 3Z",
   conversions: "M3 8.5 6.5 12 13 4.5",
   conversionRate: "M2.5 12.5 6 9l2.5 2.5L13.5 6M10 6h3.5v3.5",
   missedRate: "M4.5 4.5l7 7M11.5 4.5l-7 7",
 };
 
-const totals = computed(() =>
-  props.rows.reduce(
-    (sum, row) => ({ calls: sum.calls + row.calls, missed: sum.missed + row.missed, converted: sum.converted + row.converted }),
-    { calls: 0, missed: 0, converted: 0 },
-  ),
-);
+const totals = computed(() => sumConversionRows(props.rows));
+const conversionRate = computed(() => shareOfCalls(totals.value.converted, totals.value));
+const missedRate = computed(() => shareOfCalls(totals.value.missed, totals.value));
+const missedRateHigh = computed(() => (missedRate.value ?? 0) > MISSED_RATE_WARNING);
 
-const rate = (part: number) => (totals.value.calls ? part / totals.value.calls : null);
+const kpiCard = (label: string, value: string, icon: string, tone: string, warning = false) => ({
+  label,
+  value,
+  icon,
+  tone,
+  warning,
+});
 
 const cards = computed(() => [
-  { label: "Calls", value: formatCount(totals.value.calls), icon: ICONS.calls, tone: "accent", warning: false },
-  { label: "Conversions", value: formatCount(totals.value.converted), icon: ICONS.conversions, tone: "accent", warning: false },
-  {
-    label: "Conversion rate",
-    value: formatPercent(rate(totals.value.converted)),
-    icon: ICONS.conversionRate,
-    tone: "converted",
-    warning: false,
-  },
-  {
-    label: "Missed rate",
-    value: formatPercent(rate(totals.value.missed)),
-    icon: ICONS.missedRate,
-    tone: "missed",
-    warning: (rate(totals.value.missed) ?? 0) > MISSED_RATE_WARNING,
-  },
+  kpiCard("Calls", formatCount(totals.value.calls), ICONS.calls, "accent"),
+  kpiCard("Conversions", formatCount(totals.value.converted), ICONS.conversions, "accent"),
+  kpiCard("Conversion rate", formatPercent(conversionRate.value), ICONS.conversionRate, "converted"),
+  kpiCard("Missed rate", formatPercent(missedRate.value), ICONS.missedRate, "missed", missedRateHigh.value),
 ]);
 </script>
 
@@ -54,7 +48,9 @@ const cards = computed(() => [
       </div>
       <strong :class="{ warning: card.warning }">{{ card.value }}</strong>
     </div>
-    <p v-if="outcomeFiltered" class="note">These totals cover every outcome; the outcome filter applies to the volume chart and the feed.</p>
+    <p v-if="outcomeFiltered" class="note">
+      These totals cover every outcome; the outcome filter applies to the volume chart and the feed.
+    </p>
   </section>
 </template>
 

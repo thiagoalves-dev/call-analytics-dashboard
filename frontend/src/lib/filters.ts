@@ -15,7 +15,8 @@ export interface DateRange {
 
 const HOUR_IN_MS = 60 * 60 * 1000;
 const DAY_IN_MS = 24 * HOUR_IN_MS;
-const MAX_HOURLY_RANGE_IN_MS = 31 * DAY_IN_MS;
+export const MAX_HOURLY_RANGE_IN_DAYS = 31;
+const MAX_HOURLY_RANGE_IN_MS = MAX_HOURLY_RANGE_IN_DAYS * DAY_IN_MS;
 
 export const PRESET_DURATIONS_IN_MS: Record<RangePreset, number> = {
   "24h": DAY_IN_MS,

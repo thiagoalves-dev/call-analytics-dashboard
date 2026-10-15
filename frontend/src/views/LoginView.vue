@@ -49,9 +49,15 @@ function useDemoAccount(account: (typeof DEMO_ACCOUNTS)[number]) {
       </label>
       <label>
         <span>Password</span>
-        <input v-model="password" type="password" autocomplete="current-password" placeholder="••••••••" required />
+        <input
+          v-model="password"
+          type="password"
+          autocomplete="current-password"
+          placeholder="••••••••"
+          required
+        />
       </label>
-      <p v-if="error" class="error">{{ error }}</p>
+      <p v-if="error" class="error" role="alert">{{ error }}</p>
       <button type="submit" :disabled="submitting">{{ submitting ? "Signing in…" : "Sign in" }}</button>
       <div class="demo">
         <span class="demo-title">Demo accounts</span>
